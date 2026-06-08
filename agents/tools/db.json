@@ -1,0 +1,81 @@
+[
+    {
+        "id": 1,
+        "name": "RSUD Ponorogo",
+        "lat": -7.868,
+        "lon": 111.462,
+        "specializations": [
+            "dokter_umum",
+            "jantung",
+            "saraf"
+        ],
+        "insurance": [
+            "BPJS",
+            "Mandiri"
+        ]
+    },
+    {
+        "id": 2,
+        "name": "Klinik Sehat Sentosa",
+        "lat": -7.871,
+        "lon": 111.465,
+        "specializations": [
+            "dokter_umum"
+        ],
+        "insurance": [
+            "BPJS"
+        ]
+    },
+    {
+        "id": 3,
+        "name": "RS Aisyiyah Ponorogo",
+        "lat": -7.875,
+        "lon": 111.470,
+        "specializations": [
+            "dokter_umum",
+            "anak"
+        ],
+        "insurance": [
+            "BPJS",
+            "Mandiri"
+        ]
+    },
+    {
+        "id": 4,
+        "name": "RS Jantung Nusantara",
+        "lat": -7.872,
+        "lon": 111.468,
+        "specializations": [
+            "jantung"
+        ],
+        "insurance": [
+            "BPJS",
+            "Prudential"
+        ]
+    },
+    {
+        "id": 5,
+        "name": "RS Harapan Jantung",
+        "lat": -7.874,
+        "lon": 111.469,
+        "specializations": [
+            "jantung"
+        ],
+        "insurance": [
+            "BPJS"
+        ]
+    },
+    {
+        "id": 6,
+        "name": "RS Medika Cardio",
+        "lat": -7.876,
+        "lon": 111.471,
+        "specializations": [
+            "jantung"
+        ],
+        "insurance": [
+            "BPJS",
+            "Mandiri"
+        ]
+    }
+]
