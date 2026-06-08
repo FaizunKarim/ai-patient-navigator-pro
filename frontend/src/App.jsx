@@ -1,22 +1,37 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
-import Auth from './pages/Auth';
-import MainChat from './pages/MainChat';
+import { Routes, Route, Navigate } from "react-router-dom";
+import Auth from "./pages/Auth";
+import MainChat from "./pages/MainChat";
+import { isAuthenticated } from "./utils/auth";
+
+// Komponen Pelindung (Guard) untuk rute yang wajib login
+const ProtectedRoute = ({ children }) => {
+  if (!isAuthenticated()) {
+    // Jika tidak ada token, tendang kembali ke halaman Auth
+    return <Navigate to="/" replace />;
+  }
+  return children;
+};
 
 function App() {
-  // Nanti logika cek token JWT (localStorage) akan kita taruh di sini
-  // Untuk sementara, kita anggap user belum login (false) agar bisa mendesain halaman Auth
-  const isAuthenticated = false;
-
   return (
     <Routes>
-      {/* Jika ke root (/), cek login. Kalau belum, lempar ke /auth */}
+      {/* Rute Halaman Login/Register */}
       <Route
         path="/"
-        element={isAuthenticated ? <MainChat /> : <Navigate to="/auth" />}
+        element={
+          isAuthenticated() ? <Navigate to="/chat" replace /> : <Auth />
+        }
       />
 
-      {/* Halaman Login/Signup */}
-      <Route path="/auth" element={<Auth />} />
+      {/* Rute Halaman Utama Chat (Dilindungi) */}
+      <Route
+        path="/chat"
+        element={
+          <ProtectedRoute>
+            <MainChat />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }
