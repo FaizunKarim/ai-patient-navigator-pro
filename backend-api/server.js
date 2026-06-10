@@ -44,23 +44,32 @@ app.post("/api/auth/register", async (req, res) => {
     try {
         const { name, email, password } = req.body;
 
-        // Validasi input kosong
+        // 1. Cek kekosongan
         if (!name || !email || !password) {
             return res.status(400).json({ success: false, message: "Semua kolom wajib diisi!" });
         }
 
-        // Gunakan .lean() untuk efisiensi memori JavaScript karena kita hanya butuh membacanya
+        // 2. ATURAN PASSWORD (Min 8 karakter, ada huruf & angka)
+        const hasLetter = /[a-zA-Z]/.test(password);
+        const hasNumber = /[0-9]/.test(password);
+        
+        if (password.length < 8 || !hasLetter || !hasNumber) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Pendaftaran gagal: Password minimal 8 karakter dan wajib mengandung huruf serta angka!" 
+            });
+        }
+
+        // 3. Cek Email apakah sudah dipakai
         const userExists = await User.findOne({ email }).lean();
         if (userExists) {
-            return res.status(400).json({ success: false, message: "Email sudah terdaftar!" });
+            return res.status(400).json({ success: false, message: "Email ini sudah terdaftar di sistem kami!" });
         }
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Optimasi: Gunakan User.create agar lebih ringkas dari new User().save()
         await User.create({ name, email, password: hashedPassword });
-
         res.status(201).json({ success: true, message: "User berhasil didaftarkan!" });
     } catch (error) {
         res.status(500).json({ success: false, error: "Terjadi kesalahan internal server." });
@@ -71,10 +80,10 @@ app.post("/api/auth/login", async (req, res) => {
     try {
         const { email, password } = req.body;
 
+        // 4. Cek Login (Salah Email atau Salah Password akan memunculkan error ini)
         const user = await User.findOne({ email });
-        // Gabungkan pengecekan agar lebih aman (hacker tidak tahu apakah email atau password yang salah)
         if (!user || !(await bcrypt.compare(password, user.password))) {
-            return res.status(400).json({ success: false, message: "Kredensial tidak valid!" });
+            return res.status(400).json({ success: false, message: "Email atau Password yang Anda ketikkan salah!" });
         }
 
         const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: "7d" });
