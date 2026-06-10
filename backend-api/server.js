@@ -18,17 +18,39 @@ app.use(express.json());
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "SUPER_SECRET_KEY_HACKATHON";
 
-app.get("/", (req, res) => {
-    res.json({ message: "AI Patient Navigator API Running Perfectly" });
-});
+// Fungsi ini bertugas mengecek "Paspor/Token" sebelum user masuk ke endpoint rahasia
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Format: "Bearer <token_disini>"
 
+    if (!token) {
+        return res.status(401).json({ success: false, message: "Akses ditolak. Paspor digital tidak ditemukan." });
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ success: false, message: "Sesi telah berakhir atau token tidak valid." });
+        
+        // Simpan data ID user yang asli dari token ke dalam request
+        req.user = user; 
+        next(); // Persilakan masuk
+    });
+};
+
+app.get("/", (req, res) => {
+    res.json({ message: "🏥 AI Patient Navigator API Running Perfectly" });
+});
 
 app.post("/api/auth/register", async (req, res) => {
     try {
         const { name, email, password } = req.body;
 
-        // Cek apakah email sudah terdaftar
-        let userExists = await User.findOne({ email });
+        // Validasi input kosong
+        if (!name || !email || !password) {
+            return res.status(400).json({ success: false, message: "Semua kolom wajib diisi!" });
+        }
+
+        // Gunakan .lean() untuk efisiensi memori JavaScript karena kita hanya butuh membacanya
+        const userExists = await User.findOne({ email }).lean();
         if (userExists) {
             return res.status(400).json({ success: false, message: "Email sudah terdaftar!" });
         }
@@ -36,13 +58,12 @@ app.post("/api/auth/register", async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Simpan User Baru
-        const newUser = new User({ name, email, password: hashedPassword });
-        await newUser.save();
+        // Optimasi: Gunakan User.create agar lebih ringkas dari new User().save()
+        await User.create({ name, email, password: hashedPassword });
 
         res.status(201).json({ success: true, message: "User berhasil didaftarkan!" });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: "Terjadi kesalahan internal server." });
     }
 });
 
@@ -50,19 +71,12 @@ app.post("/api/auth/login", async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Cari user berdasarkan email
         const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(400).json({ success: false, message: "Email atau password salah!" });
+        // Gabungkan pengecekan agar lebih aman (hacker tidak tahu apakah email atau password yang salah)
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return res.status(400).json({ success: false, message: "Kredensial tidak valid!" });
         }
 
-        // Validasi kecocokan password
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(400).json({ success: false, message: "Email atau password salah!" });
-        }
-
-        // Buat Token JWT yang berlaku selama 7 Hari
         const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: "7d" });
 
         res.json({
@@ -71,26 +85,52 @@ app.post("/api/auth/login", async (req, res) => {
             user: { id: user._id, name: user.name, email: user.email }
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: "Terjadi kesalahan internal server." });
+    }
+});
+
+//Tarik Riwayat Chat khusus untuk user yang sedang login
+app.get("/api/chat/history", authenticateToken, async (req, res) => {
+    try {
+        // HANYA ambil data milik user yang sedang login (req.user.userId)
+        const history = await ChatHistory.find({ userId: req.user.userId })
+                                         .sort({ createdAt: 1 }) // Urutkan dari terlama ke terbaru
+                                         .lean(); // Efisiensi pembacaan data massal
+        
+        res.status(200).json({ success: true, count: history.length, data: history });
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Gagal mengambil riwayat chat." });
+    }
+});
+
+//Simpan pesan baru ke database
+app.post("/api/chat/send", authenticateToken, async (req, res) => {
+    try {
+        const { roomId, sender, message } = req.body;
+
+        if (!message || !sender) {
+            return res.status(400).json({ success: false, message: "Format pesan tidak lengkap." });
+        }
+
+        const chat = await ChatHistory.create({
+            userId: req.user.userId, // Anti-Spoofing: ID diambil dari sistem Token yang tak bisa dipalsukan, bukan dari ketikan user
+            roomId: roomId || "default-room",
+            sender: sender,
+            message: message
+        });
+
+        res.status(201).json({ success: true, data: chat });
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Gagal menyimpan pesan ke database." });
     }
 });
 
 
-app.post("/chat", async (req, res) => {
-    try {
-        const chat = new ChatHistory({
-            userId: req.body.userId,
-            roomId: req.body.roomId,
-            sender: req.body.sender,
-            message: req.body.message
-        });
-        await chat.save();
-        res.status(201).json({ success: true, data: chat });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
+// (Jaring Pengaman URL)
+app.use((req, res) => {
+    res.status(404).json({ success: false, message: `Jalur endpoint ${req.originalUrl} tidak ditemukan di server ini.` });
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Server running professionally on port ${PORT}`);
+    console.log(`🚀 Chat-Health Server running professionally on port ${PORT}`);
 });
