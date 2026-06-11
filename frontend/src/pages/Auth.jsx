@@ -17,31 +17,29 @@ const Auth = () => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleSubmit = async (e) => {
+   const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-        setError("");
+        
         try {
-            const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
-            const API_URL = `http://localhost:5000${endpoint}`;
+            const API_URL = isLogin ? "/api/auth/login" : "/api/auth/register";
+            
             const response = await axios.post(API_URL, formData);
-            if (response.data.success) {
+            
+            console.log("=== RESPON ASLI BACKEND ===", response.data);
+            
+            if (response.data && response.data.success) {
                 if (isLogin) {
                     setSession(response.data.token, response.data.user);
                     navigate("/chat");
-                } else {
-                    setIsLogin(true);
-                    setFormData({ name: "", email: "", password: "" });
-                    setError("Pendaftaran berhasil! Silakan masuk.");
-                }
+                } 
             }
         } catch (err) {
-            setError(err.response?.data?.message || "Koneksi gagal. Cek backend.");
+            console.error("=== KONEKSI GAGAL ===", err);
         } finally {
             setLoading(false);
         }
     };
-
     return (
         // 1. BACKGROUND UTAMA: Bersih dan Minimalis
         <div className="min-h-screen bg-gradient-to-tr from-[#EEF2F6] via-[#E0E7FF] to-[#F5F3FF] flex items-center justify-center p-4 font-sans overflow-hidden relative">
