@@ -18,15 +18,32 @@ const Auth = () => {
         setError(""); // Otomatis menyembunyikan error saat user mulai mengetik ulang
     };
 
-    const handleSubmit = async (e) => {
+   const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
+<<<<<<< HEAD
+        
+=======
         setError("");
 
+>>>>>>> main
         try {
-            const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
-            const API_URL = `http://localhost:5000${endpoint}`;
+            const API_URL = isLogin ? "/api/auth/login" : "/api/auth/register";
+            
             const response = await axios.post(API_URL, formData);
+<<<<<<< HEAD
+            
+            console.log("=== RESPON ASLI BACKEND ===", response.data);
+            
+            if (response.data && response.data.success) {
+                if (isLogin) {
+                    setSession(response.data.token, response.data.user);
+                    navigate("/chat");
+                } 
+            }
+        } catch (err) {
+            console.error("=== KONEKSI GAGAL ===", err);
+=======
 
             if (response.data.success) {
                 if (isLogin) {
@@ -42,11 +59,11 @@ const Auth = () => {
         } catch (err) {
             // MENANGKAP PESAN DARI SERVER.JS (Email terdaftar, Kredensial salah, dll)
             setError(err.response?.data?.message || "Koneksi ke server gagal. Pastikan backend menyala.");
+>>>>>>> main
         } finally {
             setLoading(false);
         }
     };
-
     return (
         <div className="min-h-screen bg-gradient-to-tr from-[#EEF2F6] via-[#E0E7FF] to-[#F5F3FF] flex items-center justify-center p-4 font-sans overflow-hidden relative">
 
