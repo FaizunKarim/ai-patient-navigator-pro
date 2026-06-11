@@ -15,16 +15,23 @@ const Auth = () => {
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
+        setError(""); // Otomatis menyembunyikan error saat user mulai mengetik ulang
     };
 
    const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
+<<<<<<< HEAD
         
+=======
+        setError("");
+
+>>>>>>> main
         try {
             const API_URL = isLogin ? "/api/auth/login" : "/api/auth/register";
             
             const response = await axios.post(API_URL, formData);
+<<<<<<< HEAD
             
             console.log("=== RESPON ASLI BACKEND ===", response.data);
             
@@ -36,29 +43,38 @@ const Auth = () => {
             }
         } catch (err) {
             console.error("=== KONEKSI GAGAL ===", err);
+=======
+
+            if (response.data.success) {
+                if (isLogin) {
+                    setSession(response.data.token, response.data.user);
+                    navigate("/chat");
+                } else {
+                    setIsLogin(true);
+                    setFormData({ name: "", email: "", password: "" });
+                    setError("");
+                    alert("Pendaftaran berhasil! Silakan masuk dengan akun baru Anda.");
+                }
+            }
+        } catch (err) {
+            // MENANGKAP PESAN DARI SERVER.JS (Email terdaftar, Kredensial salah, dll)
+            setError(err.response?.data?.message || "Koneksi ke server gagal. Pastikan backend menyala.");
+>>>>>>> main
         } finally {
             setLoading(false);
         }
     };
     return (
-        // 1. BACKGROUND UTAMA: Bersih dan Minimalis
         <div className="min-h-screen bg-gradient-to-tr from-[#EEF2F6] via-[#E0E7FF] to-[#F5F3FF] flex items-center justify-center p-4 font-sans overflow-hidden relative">
 
-            {/* --- KOTAK LOGIN --- */}
-            {/* Menggunakan bg-white/95 dan border-white/60 agar kontras kaca berpadu sempurna dengan gradasi latar belakang */}
             <div className="bg-white/95 backdrop-blur-xl max-w-[400px] w-full rounded-[40px] shadow-[0_25px_60px_-15px_rgba(15,23,42,0.15)] border border-white/60 overflow-hidden relative z-10">
 
-                {/* --- DEKORASI SUDUT (DIPERBAIKI POSISINYA) --- */}
-                {/* Aksen Kuning Kiri/Kanan Atas */}
                 <div className="absolute top-0 right-0 h-40 w-40 bg-gradient-to-bl from-[#FBBF24] to-orange-400 rounded-bl-full z-0 opacity-80 transition-transform duration-700 hover:scale-110"></div>
 
-                {/* Bulatan Biru Tua yang Sempat Rusak - Dikunci kembali posisinya di pojok kanan bawah */}
                 <div className="absolute bottom-0 right-0 translate-x-[20%] translate-y-[20%] h-36 w-36 bg-[#122A57] rounded-full z-0 opacity-90 transition-transform duration-700 hover:scale-110"></div>
 
-                {/* --- KONTEN DI DALAM KOTAK LOGIN --- */}
                 <div className="relative z-10 px-8 pt-8 pb-10 flex flex-col items-center">
 
-                    {/* Area Ilustrasi Medis */}
                     <div className="w-full h-40 mb-6 bg-transparent rounded-3xl flex items-center justify-center overflow-hidden shadow-inner group">
                         <img
                             src={HeroImage}
@@ -67,8 +83,7 @@ const Auth = () => {
                         />
                     </div>
 
-                    {/* Judul & Deskripsi */}
-                    <div className="text-center mb-8 w-full">
+                    <div className="text-center mb-6 w-full">
                         <div className="flex items-center justify-center gap-2 mb-2">
                             <BotMessageSquare className="w-8 h-8 text-[#3B82F6] drop-shadow-md" />
                             <h1 className="text-2xl font-extrabold text-[#0F172A] tracking-tight">
@@ -80,7 +95,21 @@ const Auth = () => {
                         </p>
                     </div>
 
-                    {/* Formulir Input */}
+                    {/* ========================================== */}
+                    {/* 🚨 KOTAK UI ERROR PREMIUM */}
+                    {/* ========================================== */}
+                    {error && (
+                        <div className="w-full bg-red-50/90 backdrop-blur-md border border-red-200 text-red-600 px-4 py-3.5 rounded-2xl text-sm font-medium mb-6 flex items-center gap-3 shadow-[0_4px_12px_rgba(220,38,38,0.1)] transition-all duration-300">
+                            <div className="bg-red-100 p-1.5 rounded-full flex-shrink-0">
+                                <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <span className="leading-tight">{error}</span>
+                        </div>
+                    )}
+                    {/* ========================================== */}
+
                     <form onSubmit={handleSubmit} className="w-full space-y-6">
                         {!isLogin && (
                             <div className="relative group bg-slate-50 rounded-2xl p-1 border border-slate-200 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/20 focus-within:-translate-y-1 focus-within:shadow-lg transition-all duration-300">
@@ -123,22 +152,22 @@ const Auth = () => {
                             />
                         </div>
 
-                        {/* Tombol Aksi */}
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-[#3B82F6] text-white font-bold py-4 rounded-2xl transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_10px_20px_rgba(59,130,246,0.4)] hover:bg-[#2563EB] active:translate-y-0 active:shadow-none disabled:bg-slate-300 disabled:transform-none disabled:shadow-none text-sm tracking-wide"
+                            className="w-full bg-[#3B82F6] text-white font-bold py-4 rounded-2xl transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_10px_20px_rgba(59,130,246,0.4)] hover:bg-[#2563EB] active:translate-y-0 active:shadow-none disabled:bg-slate-300 disabled:transform-none disabled:shadow-none text-sm tracking-wide flex justify-center items-center gap-2"
                         >
+                            {loading && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>}
                             {loading ? "Processing..." : (isLogin ? "Login to Dashboard" : "Sign Up")}
                         </button>
                     </form>
 
-                    {/* Navigasi Pindah Mode */}
                     <p className="text-center text-xs text-slate-500 mt-6 font-medium">
                         {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
                         <button
                             onClick={() => { setIsLogin(!isLogin); setError(""); }}
                             className="text-[#3B82F6] font-bold hover:text-[#1E40AF] transition-colors hover:underline decoration-2 underline-offset-4"
+                            type="button"
                         >
                             {isLogin ? "Sign up" : "Log in"}
                         </button>
@@ -146,8 +175,6 @@ const Auth = () => {
                 </div>
             </div>
         </div>
-
-
     );
 };
 
