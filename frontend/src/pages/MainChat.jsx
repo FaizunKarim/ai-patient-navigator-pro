@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { clearSession } from "../utils/auth";
 import SidebarHistory from '../components/SidebarHistory';
 import ChatBubble from '../components/ChatBubble';
-import { LogOut, Menu, X, Paperclip, Camera, Mic, Square, Headphones, Keyboard } from "lucide-react"; 
+import { LogOut, Menu, X, Paperclip, Camera, Mic, Square, Headphones, Keyboard } from "lucide-react";
 import axios from 'axios';
+import { getToken } from "../utils/auth";
 
 const MainChat = () => {
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ const MainChat = () => {
 
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
-  const [mediaType, setMediaType] = useState(null); 
+  const [mediaType, setMediaType] = useState(null);
   const fileInputRef = useRef(null);
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -28,17 +29,17 @@ const MainChat = () => {
   const mediaRecorderRef = useRef(null);
 
   const [isLiveVoiceMode, setIsLiveVoiceMode] = useState(false);
-  
+
   // State audioLevel sudah tidak dipakai lagi karena kita pakai Canvas, tapi saya biarkan agar aman.
-  const [audioLevel, setAudioLevel] = useState(1); 
-  
+  const [audioLevel, setAudioLevel] = useState(1);
+
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
   const animationFrameRef = useRef(null);
   const liveStreamRef = useRef(null);
 
   // ---> PERUBAHAN 1: Tambahkan ref untuk Canvas Visualizer
-  const canvasRef = useRef(null); 
+  const canvasRef = useRef(null);
   // --------------------------------------------------------
 
   const chatEndRef = useRef(null);
@@ -49,7 +50,7 @@ const MainChat = () => {
     try {
       const response = await axios.get('/api/chat/history');
       if (response.data?.success) setHistoryList(response.data.data);
-    } catch (err) {}
+    } catch (err) { }
   };
 
   useEffect(() => {
@@ -59,28 +60,28 @@ const MainChat = () => {
 
   const handleSelectRoom = async (roomId) => {
     if (String(roomId).includes("LOCAL")) {
-        const localRoom = historyList.find(room => room.roomId === roomId);
-        if (localRoom) {
-            setMessages(localRoom.chatData || []);
-            setActiveRoomId(roomId);
-            setIsSidebarOpen(false);
-        }
-        return;
+      const localRoom = historyList.find(room => room.roomId === roomId);
+      if (localRoom) {
+        setMessages(localRoom.chatData || []);
+        setActiveRoomId(roomId);
+        setIsSidebarOpen(false);
+      }
+      return;
     }
     setLoading(true);
     setActiveRoomId(roomId);
     setIsSidebarOpen(false);
     try {
       const response = await axios.get(`/api/chat/room/${roomId}`);
-      if (response.data?.success) setMessages(response.data.messages); 
-    } catch (err) {} finally { setLoading(false); }
+      if (response.data?.success) setMessages(response.data.messages);
+    } catch (err) { } finally { setLoading(false); }
   };
-  
+
   const handleNewChat = () => {
     if (messages.length > 1 && !activeRoomId) {
-        const firstUserMsg = messages.find(msg => !msg.isAi);
-        const sessionTitle = firstUserMsg ? firstUserMsg.text : "Sesi Konsultasi Medis";
-        setHistoryList(prev => [{ roomId: `LOCAL-${Date.now()}`, title: sessionTitle, chatData: messages }, ...prev]);
+      const firstUserMsg = messages.find(msg => !msg.isAi);
+      const sessionTitle = firstUserMsg ? firstUserMsg.text : "Sesi Konsultasi Medis";
+      setHistoryList(prev => [{ roomId: `LOCAL-${Date.now()}`, title: sessionTitle, chatData: messages }, ...prev]);
     }
     setActiveRoomId(null);
     setMessages([{ id: "default", text: "Halo Bos! Silakan konsultasikan keluhan Anda, kirim foto resep, video gejala, atau langsung gunakan pesan suara.", isAi: true }]);
@@ -170,27 +171,27 @@ const MainChat = () => {
       analyserRef.current = audioContextRef.current.createAnalyser();
       const source = audioContextRef.current.createMediaStreamSource(stream);
       source.connect(analyserRef.current);
-      
-      analyserRef.current.fftSize = 128; 
+
+      analyserRef.current.fftSize = 128;
       const bufferLength = analyserRef.current.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
 
       const renderFrame = () => {
         if (!analyserRef.current || !canvasRef.current) return;
-        
+
         analyserRef.current.getByteFrequencyData(dataArray);
-        
+
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         const width = canvas.width;
         const height = canvas.height;
-        
+
         ctx.clearRect(0, 0, width, height);
-        
+
         const centerX = width / 2;
         const centerY = height / 2;
-        const baseRadius = 70; 
-        
+        const baseRadius = 70;
+
         ctx.beginPath();
         const innerGradient = ctx.createRadialGradient(centerX, centerY, 10, centerX, centerY, baseRadius);
         innerGradient.addColorStop(0, '#ff7eb3');
@@ -202,34 +203,34 @@ const MainChat = () => {
 
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
-        
+
         for (let i = 0; i < bufferLength; i++) {
           const amplitude = dataArray[i] / 255;
-          const barHeight = amplitude * 50; 
-          
+          const barHeight = amplitude * 50;
+
           const angle = (i / bufferLength) * Math.PI * 2;
-          
+
           const xStart = centerX + Math.cos(angle) * baseRadius;
           const yStart = centerY + Math.sin(angle) * baseRadius;
           const xEnd = centerX + Math.cos(angle) * (baseRadius + barHeight);
           const yEnd = centerY + Math.sin(angle) * (baseRadius + barHeight);
-          
+
           const lineGradient = ctx.createLinearGradient(xStart, yStart, xEnd, yEnd);
-          lineGradient.addColorStop(0, '#8b5cf6'); 
-          lineGradient.addColorStop(1, '#ff7eb3'); 
-          
+          lineGradient.addColorStop(0, '#8b5cf6');
+          lineGradient.addColorStop(1, '#ff7eb3');
+
           ctx.strokeStyle = lineGradient;
           ctx.beginPath();
           ctx.moveTo(xStart, yStart);
           ctx.lineTo(xEnd, yEnd);
           ctx.stroke();
         }
-        
+
         animationFrameRef.current = requestAnimationFrame(renderFrame);
       };
-      
+
       setTimeout(() => renderFrame(), 50);
-      
+
     } catch (err) {
       alert("Izin mikrofon diperlukan!");
       setIsLiveVoiceMode(false);
@@ -245,26 +246,35 @@ const MainChat = () => {
   };
 
   const handleSendMessage = async (e) => {
-    e.preventDefault(); 
+    e.preventDefault();
     if (!inputText.trim() && !selectedMedia) return;
 
     const tempId = Date.now().toString();
     const userMessage = { id: tempId, text: inputText, isAi: false, mediaUrl: previewUrl, mediaType };
     setMessages((prev) => [...prev, userMessage]);
-    
+
     const textToSend = inputText;
     const mediaToSend = selectedMedia;
-    
-    setInputText(""); cancelMedia(); 
+
+    setInputText(""); cancelMedia();
 
     try {
-      const formData = new FormData();
-      if (activeRoomId && !String(activeRoomId).includes("LOCAL")) formData.append('roomId', activeRoomId);
-      formData.append('message', textToSend);
-      if (mediaToSend) formData.append('media', mediaToSend);
+      const payload = {
+        roomId: activeRoomId,
+        message: textToSend
+      };
 
-      const response = await axios.post('/api/chat/send', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const token = getToken();
 
+      const response = await axios.post(
+        '/api/chat/send',
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
       if (response.data?.success) {
         if (!activeRoomId && response.data.roomId) setActiveRoomId(response.data.roomId);
         const aiMessage = { id: response.data.aiResponse.id || Date.now().toString(), text: response.data.aiResponse.text, isAi: true };
@@ -279,7 +289,7 @@ const MainChat = () => {
 
   return (
     <div className="relative flex w-full h-screen overflow-hidden bg-[#F8FAFC] font-sans antialiased">
-      
+
       {/* MODAL KAMERA LIVE */}
       {isCameraOpen && (
         <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md">
@@ -308,24 +318,24 @@ const MainChat = () => {
 
           {/* ---> PERUBAHAN 3: Element div Orb diganti menjadi element Canvas <--- */}
           <div className="relative flex items-center justify-center w-full max-w-sm flex-1">
-            <canvas 
-              ref={canvasRef} 
-              width={350} 
-              height={350} 
+            <canvas
+              ref={canvasRef}
+              width={350}
+              height={350}
               className="filter drop-shadow-[0_0_30px_rgba(139,92,246,0.4)]"
             />
           </div>
           {/* -------------------------------------------------------- */}
 
           <div className="text-center w-full mb-12">
-             <p className="text-slate-300 text-lg font-medium tracking-wide">What are your symptoms today?</p>
+            <p className="text-slate-300 text-lg font-medium tracking-wide">What are your symptoms today?</p>
           </div>
 
           <div className="flex items-center gap-8 mb-8">
             <button onClick={stopLiveVoice} className="p-4 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md"><Keyboard className="w-6 h-6" /></button>
             <button className="relative p-6 bg-[#A3E635] hover:bg-[#84cc16] text-slate-900 rounded-full transition-all shadow-[0_0_30px_rgba(163,230,53,0.3)] hover:scale-105 group">
-               <Mic className="w-8 h-8" />
-               <div className="absolute inset-0 border-2 border-[#A3E635] rounded-full animate-ping opacity-50"></div>
+              <Mic className="w-8 h-8" />
+              <div className="absolute inset-0 border-2 border-[#A3E635] rounded-full animate-ping opacity-50"></div>
             </button>
             <button onClick={stopLiveVoice} className="p-4 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md"><X className="w-6 h-6" /></button>
           </div>
@@ -340,10 +350,10 @@ const MainChat = () => {
           <SidebarHistory historyList={historyList} onNewChat={handleNewChat} onSelectRoom={handleSelectRoom} activeRoomId={activeRoomId} />
         </div>
         <div className="p-5 border-t w-72">
-          <button onClick={() => {clearSession(); navigate("/");}} className="w-full flex items-center justify-center gap-2 py-3 bg-red-50 text-red-600 rounded-2xl font-semibold"><LogOut className="w-4 h-4"/> Keluar</button>
+          <button onClick={() => { clearSession(); navigate("/"); }} className="w-full flex items-center justify-center gap-2 py-3 bg-red-50 text-red-600 rounded-2xl font-semibold"><LogOut className="w-4 h-4" /> Keluar</button>
         </div>
       </div>
-      
+
       {/* AREA CHAT UTAMA */}
       <div className="flex-1 h-screen flex flex-col w-full relative z-10">
         <header className="h-20 bg-white border-b px-6 flex items-center justify-between">
@@ -399,17 +409,17 @@ const MainChat = () => {
                 <button type="button" onClick={() => fileInputRef.current.click()} className="p-2.5 text-slate-400 hover:text-indigo-600 rounded-xl"><Paperclip className="w-5 h-5" /></button>
                 <button type="button" onClick={openCamera} className="p-2.5 text-slate-400 hover:text-indigo-600 rounded-xl"><Camera className="w-5 h-5" /></button>
 
-                <input 
+                <input
                   type="text" value={inputText} onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Ketik pesan atau masuk mode suara..." 
+                  placeholder="Ketik pesan atau masuk mode suara..."
                   className="w-full px-2 py-2 bg-transparent text-sm font-medium focus:outline-none"
                 />
 
-                <button 
-                  type="button" 
-                  onClick={startLiveVoice} 
+                <button
+                  type="button"
+                  onClick={startLiveVoice}
                   disabled={inputText.length > 0 || selectedMedia}
-                  className="p-2.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all shadow-sm disabled:opacity-0 disabled:pointer-events-none" 
+                  className="p-2.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all shadow-sm disabled:opacity-0 disabled:pointer-events-none"
                   title="Masuk Mode Live Voice"
                 >
                   <Headphones className="w-5 h-5" />
@@ -417,11 +427,11 @@ const MainChat = () => {
               </div>
               // --------------------------------------------------------
             )}
-            
+
             {/* ---> PERUBAHAN 5: Tombol Kirim dengan warna Solid/Cerah saat di Hover <--- */}
-            <button 
-              type="submit" 
-              disabled={(!inputText && !selectedMedia) || isRecording} 
+            <button
+              type="submit"
+              disabled={(!inputText && !selectedMedia) || isRecording}
               className="bg-indigo-400 hover:bg-indigo-600 text-white px-6 py-4 rounded-2xl text-sm font-bold shadow-md hover:shadow-[0_0_20px_rgba(79,70,229,0.6)] disabled:opacity-40 disabled:shadow-none transition-all duration-300 ease-out active:scale-95 transform"
             >
               Kirim

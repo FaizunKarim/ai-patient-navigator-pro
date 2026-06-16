@@ -29,9 +29,9 @@ const authenticateToken = (req, res, next) => {
 
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) return res.status(403).json({ success: false, message: "Sesi telah berakhir atau token tidak valid." });
-        
+
         // Simpan data ID user yang asli dari token ke dalam request
-        req.user = user; 
+        req.user = user;
         next(); // Persilakan masuk
     });
 };
@@ -52,11 +52,11 @@ app.post("/api/auth/register", async (req, res) => {
         // 2. ATURAN PASSWORD (Min 8 karakter, ada huruf & angka)
         const hasLetter = /[a-zA-Z]/.test(password);
         const hasNumber = /[0-9]/.test(password);
-        
+
         if (password.length < 8 || !hasLetter || !hasNumber) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Pendaftaran gagal: Password minimal 8 karakter dan wajib mengandung huruf serta angka!" 
+            return res.status(400).json({
+                success: false,
+                message: "Pendaftaran gagal: Password minimal 8 karakter dan wajib mengandung huruf serta angka!"
             });
         }
 
@@ -103,9 +103,9 @@ app.get("/api/chat/history", authenticateToken, async (req, res) => {
     try {
         // HANYA ambil data milik user yang sedang login (req.user.userId)
         const history = await ChatHistory.find({ userId: req.user.userId })
-                                         .sort({ createdAt: 1 }) // Urutkan dari terlama ke terbaru
-                                         .lean(); // Efisiensi pembacaan data massal
-        
+            .sort({ createdAt: 1 }) // Urutkan dari terlama ke terbaru
+            .lean(); // Efisiensi pembacaan data massal
+
         res.status(200).json({ success: true, count: history.length, data: history });
     } catch (error) {
         res.status(500).json({ success: false, error: "Gagal mengambil riwayat chat." });
@@ -115,25 +115,40 @@ app.get("/api/chat/history", authenticateToken, async (req, res) => {
 //Simpan pesan baru ke database
 app.post("/api/chat/send", authenticateToken, async (req, res) => {
     try {
-        const { roomId, sender, message } = req.body;
+        const { roomId, message } = req.body;
 
-        if (!message || !sender) {
-            return res.status(400).json({ success: false, message: "Format pesan tidak lengkap." });
+        if (!message) {
+            return res.status(400).json({
+                success: false,
+                message: "Pesan wajib diisi."
+            });
         }
 
-        const chat = await ChatHistory.create({
-            userId: req.user.userId, // Anti-Spoofing: ID diambil dari sistem Token yang tak bisa dipalsukan, bukan dari ketikan user
+        await ChatHistory.create({
+            userId: req.user.userId,
             roomId: roomId || "default-room",
-            sender: sender,
+            sender: "user",
             message: message
         });
 
-        res.status(201).json({ success: true, data: chat });
+        res.status(201).json({
+            success: true,
+            roomId: roomId || "default-room",
+            aiResponse: {
+                id: Date.now().toString(),
+                text: `Patient Navigator menerima pesan: ${message}`
+            }
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, error: "Gagal menyimpan pesan ke database." });
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            error: "Gagal menyimpan pesan ke database."
+        });
     }
 });
-
 
 // (Jaring Pengaman URL)
 app.use((req, res) => {
