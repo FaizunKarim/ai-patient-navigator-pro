@@ -9,13 +9,14 @@ from typing import Any, Literal
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, ValidationError
-from band.client.rest import (
+from thenvoi.client.rest import (
     AsyncRestClient,
     ChatMessageRequest,
     ChatMessageRequestMentionsItem,
     DEFAULT_REQUEST_OPTIONS,
 )
-from band.platform import MessageEvent, RoomAddedEvent, BandLink
+from thenvoi.platform.event import MessageEvent, RoomAddedEvent
+from thenvoi.platform import ThenvoiLink
 
 from tools.geo_routing import recommend_facilities
 
@@ -57,7 +58,7 @@ def _should_process_message(
 
 
 def _build_llm():
-    # Coba Groq dulu (primary)
+    # Cobo Groq dulu (primary)
     groq_key = os.getenv("GROQ_API_KEY")
     if groq_key:
         try:
@@ -228,10 +229,19 @@ async def run_agent() -> None:
     patient_insurance = os.getenv("DEFAULT_PATIENT_INSURANCE", "BPJS")
 
     llm = _build_llm()
-    link = BandLink(agent_id=agent_id, api_key=api_key)
+    print(f"🤖 Agent starting... ID: {agent_id}")
+    print(f"📍 Default location: {patient_lat}, {patient_lon}")
+    print(f"🏥 Default insurance: {patient_insurance}")
+    print(f"🧠 LLM: {'Groq/OpenAI' if llm else 'Rule-based (no LLM)'}")
+    
+    link = ThenvoiLink(agent_id=agent_id, api_key=api_key)
+    print("🔌 Connecting to Band Platform...")
 
     await link.connect()
+    print("✅ Connected to Band Platform!")
+    
     await link.subscribe_agent_rooms(agent_id)
+    print("✅ Subscribed to agent rooms!")
 
     try:
         chats = await link.rest.agent_api_chats.list_agent_chats(
@@ -246,8 +256,10 @@ async def run_agent() -> None:
     except Exception:
         pass
 
+    print("\n👂 Listening for messages... (Press Ctrl+C to stop)")
     async for event in link:
         if isinstance(event, RoomAddedEvent) and event.room_id:
+            print(f"📥 New room added: {event.room_id}")
             await link.subscribe_room(event.room_id)
             continue
 
@@ -267,6 +279,7 @@ async def run_agent() -> None:
         sender_name = getattr(payload, "sender_name", None)
         content = getattr(payload, "content", "")
 
+        print(f"💬 Processing message from {sender_name}: {content[:50]}...")
         await link.mark_processing(room_id, message_id)
 
         try:
@@ -278,6 +291,7 @@ async def run_agent() -> None:
 
             if triage.status == "INCOMPLETE":
                 q = triage.clarifying_question or "Boleh jelaskan gejalanya lebih spesifik?"
+                print(f"❓ Clarifying: {q}")
                 await _reply(link.rest, room_id=room_id, sender_id=sender_id, sender_name=sender_name, text=q)
                 await link.mark_processed(room_id, message_id)
                 continue
@@ -286,6 +300,7 @@ async def run_agent() -> None:
             if urgency == "LOW" and triage.otc_recommendations:
                 otc = ", ".join(triage.otc_recommendations)
                 text = (triage.summary or "Keluhan tampak ringan.") + f"\nSaran OTC: {otc}"
+                print(f"💊 LOW urgency - OTC: {otc}")
                 await _reply(link.rest, room_id=room_id, sender_id=sender_id, sender_name=sender_name, text=text)
                 await link.mark_processed(room_id, message_id)
                 continue
@@ -302,9 +317,11 @@ async def run_agent() -> None:
                 limit=3,
             )
             text = _format_routing_message(triage, routing, patient_insurance)
+            print(f"🏥 Routing to {spec}: {routing.recommendations[0].name if routing.recommendations else 'No facilities'}")
             await _reply(link.rest, room_id=room_id, sender_id=sender_id, sender_name=sender_name, text=text)
             await link.mark_processed(room_id, message_id)
         except Exception as e:
+            print(f"❌ Error: {e}")
             await link.mark_failed(room_id, message_id, str(e))
 
 

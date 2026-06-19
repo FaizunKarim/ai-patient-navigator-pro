@@ -1,19 +1,16 @@
 {
-  "name": "ai-health-project",
+  "name": "ai-patient-navigator-pro",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "AI Patient Navigator Pro - Full stack medical triage application",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node start.js",
+    "dev:backend": "cd backend-api && node server.js",
+    "dev:frontend": "cd frontend && pnpm run dev",
+    "dev:agent": "cd agents && uv run python triage_agent.py",
+    "install:all": "pnpm install && cd backend-api && pnpm install && cd frontend && pnpm install"
   },
-  "keywords": [],
+  "keywords": ["ai", "medical", "triage", "patient-navigator"],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "mongoose": "^9.6.3"
-  }
+  "type": "commonjs"
 }
