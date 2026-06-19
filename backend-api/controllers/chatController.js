@@ -1,6 +1,6 @@
 const ChatHistory = require("../models/ChatHistory");
 const User = require("../models/User");
-const thenvoi = require("../services/thenvoiService");
+const band = require("../services/bandService");
 
 const getHistory = async (req, res) => {
   try {
@@ -13,8 +13,8 @@ const getHistory = async (req, res) => {
 
 const getSessions = async (req, res) => {
   try {
-    if (thenvoi.isThenvoiConfigured()) {
-      const data = await thenvoi.listChats({ page: 1, pageSize: 50 });
+    if (band.isBandConfigured()) {
+      const data = await band.listChats({ page: 1, pageSize: 50 });
       const chats = data?.data || data?.chats || [];
       const sessions = chats.map((c) => ({
         roomId: c.id,
@@ -48,17 +48,17 @@ const ensureSession = async (req, res) => {
     const user = await User.findById(req.user.userId);
     if (!user) return res.status(404).json({ success: false, message: "User tidak ditemukan." });
 
-    if (!thenvoi.isThenvoiConfigured()) {
+    if (!band.isBandConfigured()) {
       return res.status(200).json({ success: true, roomId: user.bandChatId || "default-room", mode: "local" });
     }
 
     if (fresh || !user.bandChatId) {
-      const chatId = await thenvoi.createChat();
+      const chatId = await band.createChat();
       user.bandChatId = chatId;
       await user.save();
     }
 
-    return res.status(200).json({ success: true, roomId: user.bandChatId, mode: "thenvoi" });
+    return res.status(200).json({ success: true, roomId: user.bandChatId, mode: "band" });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Gagal membuat sesi chat." });
   }
@@ -68,8 +68,8 @@ const getRoom = async (req, res) => {
   try {
     const { roomId } = req.params;
 
-    if (thenvoi.isThenvoiConfigured()) {
-      const data = await thenvoi.listMessages({ chatId: roomId, page: 1, pageSize: 100 });
+    if (band.isBandConfigured()) {
+      const data = await band.listMessages({ chatId: roomId, page: 1, pageSize: 100 });
       const items = data?.data || data?.messages || [];
       const messages = items
         .slice()
@@ -115,7 +115,7 @@ const sendMessage = async (req, res) => {
       } catch { /* non-blokir jika gagal */ }
     }
 
-    if (!thenvoi.isThenvoiConfigured()) {
+    if (!band.isBandConfigured()) {
       await ChatHistory.create({
         userId: req.user.userId,
         roomId: roomId || "default-room",
@@ -136,21 +136,21 @@ const sendMessage = async (req, res) => {
     const user = await User.findById(req.user.userId);
     if (!user) return res.status(404).json({ success: false, message: "User tidak ditemukan." });
 
-    const chatId = roomId || user.bandChatId || (await thenvoi.createChat());
+    const chatId = roomId || user.bandChatId || (await band.createChat());
     if (!user.bandChatId) {
       user.bandChatId = chatId;
       await user.save();
     }
 
-    const agentId = process.env.THENVOI_AGENT_ID;
-    const agentHandle = process.env.THENVOI_AGENT_HANDLE;
-    if (!agentId) return res.status(500).json({ success: false, message: "THENVOI_AGENT_ID belum di-set di server." });
+    const agentId = process.env.BAND_AGENT_ID;
+    const agentHandle = process.env.BAND_AGENT_HANDLE;
+    if (!agentId) return res.status(500).json({ success: false, message: "BAND_AGENT_ID belum di-set di server." });
 
     const mentions = [{ id: agentId }];
     const prefixHandle = agentHandle ? (agentHandle.startsWith("@") ? agentHandle : `@${agentHandle}`) : null;
     const content = prefixHandle && !message.includes(prefixHandle) ? `${prefixHandle} ${message}` : message;
 
-    await thenvoi.sendMessage({ chatId, content, mentions });
+    await band.sendMessage({ chatId, content, mentions });
 
     return res.status(201).json({
       success: true,

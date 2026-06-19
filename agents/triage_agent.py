@@ -9,13 +9,13 @@ from typing import Any, Literal
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, ValidationError
-from thenvoi.client.rest import (
+from band.client.rest import (
     AsyncRestClient,
     ChatMessageRequest,
     ChatMessageRequestMentionsItem,
     DEFAULT_REQUEST_OPTIONS,
 )
-from thenvoi.platform import MessageEvent, RoomAddedEvent, ThenvoiLink
+from band.platform import MessageEvent, RoomAddedEvent, BandLink
 
 from tools.geo_routing import recommend_facilities
 
@@ -205,17 +205,17 @@ async def _reply(
 async def run_agent() -> None:
     load_dotenv()
 
-    agent_id = os.getenv("THENVOI_AGENT_ID") or os.getenv("BAND_AGENT_ID")
-    api_key = os.getenv("THENVOI_API_KEY") or os.getenv("BAND_API_KEY")
+    agent_id = os.getenv("BAND_AGENT_ID")
+    api_key = os.getenv("BAND_API_KEY")
     if not agent_id or not api_key:
-        raise RuntimeError("THENVOI_AGENT_ID dan THENVOI_API_KEY wajib di-set")
+        raise RuntimeError("BAND_AGENT_ID dan BAND_API_KEY wajib di-set")
 
     patient_lat = float(os.getenv("DEFAULT_PATIENT_LAT", "-7.870"))
     patient_lon = float(os.getenv("DEFAULT_PATIENT_LON", "111.463"))
     patient_insurance = os.getenv("DEFAULT_PATIENT_INSURANCE", "BPJS")
 
     llm = _build_llm()
-    link = ThenvoiLink(agent_id=agent_id, api_key=api_key)
+    link = BandLink(agent_id=agent_id, api_key=api_key)
 
     await link.connect()
     await link.subscribe_agent_rooms(agent_id)

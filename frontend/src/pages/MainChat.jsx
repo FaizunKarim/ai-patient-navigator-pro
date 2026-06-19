@@ -104,7 +104,7 @@ const MainChat = () => {
             if (response.data.aiResponse?.text) {
               setMessages((prev) => [...prev, { id: Date.now().toString(), text: response.data.aiResponse.text, isAi: true }]);
             }
-            if (nextRoomId && (sessionData?.mode || chatMode) === "thenvoi") {
+            if (nextRoomId && (sessionData?.mode || chatMode) === "band") {
               const room = await api.get(`/api/chat/room/${nextRoomId}`);
               if (room.data?.success) setMessages(room.data.messages);
             }
@@ -131,7 +131,7 @@ const MainChat = () => {
   };
 
   const handleNewChat = async () => {
-    if (chatMode !== "thenvoi") {
+    if (chatMode !== "band") {
       if (messages.length > 1 && !activeRoomId) {
         const firstUserMsg = messages.find(msg => !msg.isAi);
         const sessionTitle = firstUserMsg ? firstUserMsg.text : "Sesi Konsultasi Medis";
@@ -143,7 +143,7 @@ const MainChat = () => {
         const session = await api.get("/api/chat/session?fresh=true");
         if (session.data?.success) {
           setActiveRoomId(session.data.roomId || null);
-          setChatMode(session.data.mode || "thenvoi");
+          setChatMode(session.data.mode || "band");
           await fetchChatHistory();
         }
       } catch {}
@@ -299,7 +299,7 @@ const MainChat = () => {
         if (response.data.aiResponse?.text) {
           setMessages((prev) => [...prev, { id: response.data.aiResponse.id || Date.now().toString(), text: response.data.aiResponse.text, isAi: true }]);
         }
-        if (nextRoomId && chatMode === "thenvoi") {
+        if (nextRoomId && chatMode === "band") {
           setTimeout(async () => {
             try {
               const room = await api.get(`/api/chat/room/${nextRoomId}`);

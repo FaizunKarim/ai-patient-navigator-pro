@@ -103,12 +103,12 @@ Semua endpoint chat memerlukan **Authorization header**: `Bearer <token>`
 }
 ```
 
-Atau (mode Thenvoi):
+Atau (mode Band):
 ```json
 {
   "success": true,
   "roomId": "chat-uuid-here",
-  "mode": "thenvoi"
+  "mode": "band"
 }
 ```
 
@@ -138,7 +138,7 @@ Catatan: `lat` dan `lon` bersifat opsional (dikirim saat GPS tersedia).
 }
 ```
 
-**Response (201) - Mode Thenvoi:**
+**Response (201) - Mode Band:**
 ```json
 {
   "success": true,
@@ -299,9 +299,9 @@ Catatan: `lat` dan `lon` bersifat opsional (dikirim saat GPS tersedia).
 | `PORT` | Port backend server | `5000` |
 | `MONGODB_URI` | URI koneksi MongoDB | `mongodb://127.0.0.1:27017/ai_patient_navigator` |
 | `JWT_SECRET` | Secret key untuk JWT | `rahasia_super_aman` |
-| `THENVOI_API_KEY` | API Key Thenvoi/Band | `tnv_key_xxx` |
-| `THENVOI_AGENT_ID` | Agent ID Thenvoi | `agent-uuid` |
-| `THENVOI_AGENT_HANDLE` | Handle mention agent | `@triage_agent` |
+| `BAND_API_KEY` | API Key Band Platform | `band_key_xxx` |
+| `BAND_AGENT_ID` | Agent ID Band | `agent-uuid` |
+| `BAND_AGENT_HANDLE` | Handle mention agent | `@triage_agent` |
 | `GROQ_API_KEY` | API Key Groq | `gsk_xxx` |
 | `GROQ_BASE_URL` | Base URL Groq | `https://api.groq.com/openai/v1` |
 | `AI_MODEL` | Model LLM | `llama-3.3-70b-versatile` |
