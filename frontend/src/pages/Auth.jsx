@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import { setSession } from "../utils/auth";
 import { Mail, Lock, User as UserIcon, BotMessageSquare } from "lucide-react";
 import HeroImage from "../assets/login.svg";
+import { api } from "../utils/api";
 
 const Auth = () => {
     const [isLogin, setIsLogin] = useState(true);
@@ -35,9 +35,7 @@ const Auth = () => {
                 ? "/api/auth/login"
                 : "/api/auth/register";
 
-            const response = await axios.post(API_URL, formData);
-
-            console.log("=== RESPON ASLI BACKEND ===", response.data);
+            const response = await api.post(API_URL, formData);
 
             if (response.data && response.data.success) {
                 if (isLogin) {
@@ -45,7 +43,7 @@ const Auth = () => {
                         response.data.token,
                         response.data.user
                     );
-                    navigate("/chat");
+                    navigate("/chat", { replace: true });
                 } else {
                     setIsLogin(true);
                     setFormData({
@@ -60,8 +58,6 @@ const Auth = () => {
                 }
             }
         } catch (err) {
-            console.error("=== KONEKSI GAGAL ===", err);
-
             setError(
                 err.response?.data?.message ||
                 "Koneksi ke server gagal. Pastikan backend menyala."

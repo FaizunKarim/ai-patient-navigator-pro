@@ -1,6 +1,6 @@
 import React from 'react';
 
-const SidebarHistory = ({ historyList = [], onNewChat }) => {
+const SidebarHistory = ({ historyList = [], onNewChat, onSelectRoom, activeRoomId }) => {
   return (
     <div className="w-full h-full flex flex-col p-5">
       
@@ -33,7 +33,15 @@ const SidebarHistory = ({ historyList = [], onNewChat }) => {
             </div>
         ) : (
             historyList.map((session, index) => (
-                <div key={index} className="p-3.5 hover:bg-white rounded-2xl border border-transparent hover:border-slate-200/80 hover:shadow-sm cursor-pointer transition group">
+                <div
+                  key={index}
+                  onClick={() => onSelectRoom && onSelectRoom(session.roomId)}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition group ${
+                    activeRoomId === session.roomId
+                      ? "bg-white border-slate-200/80 shadow-sm"
+                      : "border-transparent hover:border-slate-200/80 hover:bg-white hover:shadow-sm"
+                  }`}
+                >
                     <div className="text-sm font-semibold text-slate-600 group-hover:text-slate-700 truncate flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-slate-300 group-hover:bg-indigo-500 transition-colors"></span>
                         {session.title || "Konsultasi Medis"}

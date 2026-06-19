@@ -4,8 +4,7 @@ import { clearSession } from "../utils/auth";
 import SidebarHistory from '../components/SidebarHistory';
 import ChatBubble from '../components/ChatBubble';
 import { LogOut, Menu, X, Paperclip, Camera, Mic, Square, Headphones, Keyboard } from "lucide-react";
-import axios from 'axios';
-import { getToken } from "../utils/auth";
+import { api } from "../utils/api";
 
 const MainChat = () => {
   const navigate = useNavigate();
@@ -16,6 +15,7 @@ const MainChat = () => {
   const [historyList, setHistoryList] = useState([]);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
+  const [chatMode, setChatMode] = useState("local");
 
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -48,14 +48,52 @@ const MainChat = () => {
 
   const fetchChatHistory = async () => {
     try {
-      const response = await axios.get('/api/chat/history');
+      const response = await api.get('/api/chat/sessions');
       if (response.data?.success) setHistoryList(response.data.data);
     } catch (err) { }
   };
 
   useEffect(() => {
-    fetchChatHistory();
-    handleNewChat();
+    const init = async () => {
+      await fetchChatHistory();
+      let sessionData = null;
+      try {
+        const session = await api.get("/api/chat/session");
+        if (session.data?.success) {
+          sessionData = session.data;
+          setActiveRoomId(session.data.roomId || null);
+          setChatMode(session.data.mode || "local");
+        }
+      } catch { }
+      await handleNewChat();
+
+      const draft = localStorage.getItem("pending_draft_message");
+      const pendingRoomId = localStorage.getItem("pending_room_id");
+      if (draft) {
+        localStorage.removeItem("pending_draft_message");
+        localStorage.removeItem("pending_room_id");
+        const tempId = Date.now().toString();
+        setMessages((prev) => [...prev, { id: tempId, text: draft, isAi: false }]);
+        try {
+          const response = await api.post("/api/chat/send", {
+            roomId: pendingRoomId || sessionData?.roomId || activeRoomId,
+            message: draft,
+          });
+          if (response.data?.success) {
+            const nextRoomId = response.data.roomId || pendingRoomId || activeRoomId;
+            if (!activeRoomId && nextRoomId) setActiveRoomId(nextRoomId);
+            if (response.data.aiResponse?.text) {
+              setMessages((prev) => [...prev, { id: Date.now().toString(), text: response.data.aiResponse.text, isAi: true }]);
+            }
+            if (nextRoomId && (sessionData?.mode || chatMode) === "thenvoi") {
+              const room = await api.get(`/api/chat/room/${nextRoomId}`);
+              if (room.data?.success) setMessages(room.data.messages);
+            }
+          }
+        } catch { }
+      }
+    };
+    init();
   }, []);
 
   const handleSelectRoom = async (roomId) => {
@@ -72,18 +110,30 @@ const MainChat = () => {
     setActiveRoomId(roomId);
     setIsSidebarOpen(false);
     try {
-      const response = await axios.get(`/api/chat/room/${roomId}`);
+      const response = await api.get(`/api/chat/room/${roomId}`);
       if (response.data?.success) setMessages(response.data.messages);
     } catch (err) { } finally { setLoading(false); }
   };
 
-  const handleNewChat = () => {
-    if (messages.length > 1 && !activeRoomId) {
-      const firstUserMsg = messages.find(msg => !msg.isAi);
-      const sessionTitle = firstUserMsg ? firstUserMsg.text : "Sesi Konsultasi Medis";
-      setHistoryList(prev => [{ roomId: `LOCAL-${Date.now()}`, title: sessionTitle, chatData: messages }, ...prev]);
+  const handleNewChat = async () => {
+    if (chatMode !== "thenvoi") {
+      if (messages.length > 1 && !activeRoomId) {
+        const firstUserMsg = messages.find(msg => !msg.isAi);
+        const sessionTitle = firstUserMsg ? firstUserMsg.text : "Sesi Konsultasi Medis";
+        setHistoryList(prev => [{ roomId: `LOCAL-${Date.now()}`, title: sessionTitle, chatData: messages }, ...prev]);
+      }
+      setActiveRoomId(null);
+    } else {
+      try {
+        const session = await api.get("/api/chat/session?fresh=true");
+        if (session.data?.success) {
+          setActiveRoomId(session.data.roomId || null);
+          setChatMode(session.data.mode || "thenvoi");
+          await fetchChatHistory();
+        }
+      } catch { }
     }
-    setActiveRoomId(null);
+
     setMessages([{ id: "default", text: "Halo Bos! Silakan konsultasikan keluhan Anda, kirim foto resep, video gejala, atau langsung gunakan pesan suara.", isAi: true }]);
     setIsSidebarOpen(false);
     cancelMedia();
@@ -254,8 +304,6 @@ const MainChat = () => {
     setMessages((prev) => [...prev, userMessage]);
 
     const textToSend = inputText;
-    const mediaToSend = selectedMedia;
-
     setInputText(""); cancelMedia();
 
     try {
@@ -264,23 +312,31 @@ const MainChat = () => {
         message: textToSend
       };
 
-      const token = getToken();
-
-      const response = await axios.post(
-        '/api/chat/send',
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
+      const response = await api.post('/api/chat/send', payload);
       if (response.data?.success) {
-        if (!activeRoomId && response.data.roomId) setActiveRoomId(response.data.roomId);
-        const aiMessage = { id: response.data.aiResponse.id || Date.now().toString(), text: response.data.aiResponse.text, isAi: true };
-        setMessages((prev) => [...prev, aiMessage]);
+        const nextRoomId = response.data.roomId || activeRoomId;
+        if (!activeRoomId && nextRoomId) setActiveRoomId(nextRoomId);
+        if (response.data.aiResponse?.text) {
+          const aiMessage = { id: response.data.aiResponse.id || Date.now().toString(), text: response.data.aiResponse.text, isAi: true };
+          setMessages((prev) => [...prev, aiMessage]);
+        }
+        if (nextRoomId && chatMode === "thenvoi") {
+          setTimeout(async () => {
+            try {
+              const room = await api.get(`/api/chat/room/${nextRoomId}`);
+              if (room.data?.success) setMessages(room.data.messages);
+            } catch { }
+          }, 1200);
+        }
       }
     } catch (err) {
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        localStorage.setItem("pending_draft_message", textToSend);
+        if (activeRoomId) localStorage.setItem("pending_room_id", activeRoomId);
+        navigate("/");
+        return;
+      }
       setTimeout(() => {
         setMessages((prev) => [...prev, { id: Date.now().toString(), text: `[Offline Mode] Pesan aman tersimpan lokal.`, isAi: true }]);
       }, 1000);

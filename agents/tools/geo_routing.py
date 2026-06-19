@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 import json
 import math
-from insurance import filter_insurance
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
-# ==========================
-# FUNGSI HITUNG JARAK
-# ==========================
+from .insurance import filter_insurance
 
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371  # Radius bumi dalam KM
+
+def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371
 
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
@@ -20,130 +23,89 @@ def haversine(lat1, lon1, lat2, lon2):
     )
 
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-    return R * c
-
-
-# ==========================
-# LOAD DATABASE KLINIK
-# ==========================
-
-with open("db.json", "r", encoding="utf-8") as file:
-    hospitals = json.load(file)
+    return r * c
 
 
-# ==========================
-# DATA PASIEN
-# ==========================
-
-patient_lat = -7.870
-patient_lon = 111.463
-
-# nanti dari AI Agent
-required_specialization = "jantung"
-
-# nanti dari AI Agent
-patient_insurance = "BPJS"
+def load_facilities(db_path: str | Path | None = None) -> list[dict[str, Any]]:
+    path = Path(db_path) if db_path else (Path(__file__).resolve().parent / "db.json")
+    with path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, list):
+        raise ValueError("Database fasilitas harus berbentuk list JSON")
+    return data
 
 
-# ==========================
-# SEMUA KLINIK TERDEKAT
-# ==========================
-
-all_clinics = []
-
-for hospital in hospitals:
-
-    distance = haversine(
-        patient_lat,
-        patient_lon,
-        hospital["lat"],
-        hospital["lon"]
-    )
-
-    all_clinics.append({
-        "name": hospital["name"],
-        "distance": round(distance, 2)
-    })
-
-all_clinics.sort(key=lambda x: x["distance"])
-
-print("\n==============================")
-print("SEMUA KLINIK TERDEKAT")
-print("==============================\n")
-
-for clinic in all_clinics:
-    print(f"{clinic['name']} - {clinic['distance']} km")
+def _rank_by_distance(
+    facilities: list[dict[str, Any]],
+    patient_lat: float,
+    patient_lon: float,
+) -> list[dict[str, Any]]:
+    ranked: list[dict[str, Any]] = []
+    for facility in facilities:
+        lat = float(facility.get("lat"))
+        lon = float(facility.get("lon"))
+        distance_km = haversine(patient_lat, patient_lon, lat, lon)
+        ranked.append(
+            {
+                **facility,
+                "distance_km": round(distance_km, 2),
+            }
+        )
+    ranked.sort(key=lambda x: x.get("distance_km", 10**9))
+    return ranked
 
 
-# ==========================
-# FILTER SPESIALIS
-# ==========================
-
-specialist_clinics = []
-
-for hospital in hospitals:
-
-    if required_specialization not in hospital["specializations"]:
-        continue
-
-    distance = haversine(
-        patient_lat,
-        patient_lon,
-        hospital["lat"],
-        hospital["lon"]
-    )
-
-    specialist_clinics.append({
-        "name": hospital["name"],
-        "distance": round(distance, 2),
-        "insurance": hospital["insurance"]
-    })
-
-specialist_clinics.sort(key=lambda x: x["distance"])
-
-print("\n==============================")
-print(f"KLINIK SPESIALIS {required_specialization.upper()}")
-print("==============================\n")
-
-for clinic in specialist_clinics:
-    print(
-        f"{clinic['name']} - "
-        f"{clinic['distance']} km"
-    )
+def filter_by_specialization(
+    facilities: list[dict[str, Any]],
+    specialization: str | None,
+) -> list[dict[str, Any]]:
+    if not specialization:
+        return facilities
+    spec = specialization.strip().lower()
+    out: list[dict[str, Any]] = []
+    for facility in facilities:
+        specializations = facility.get("specializations") or []
+        if any(str(s).lower() == spec for s in specializations):
+            out.append(facility)
+    return out
 
 
-# ==========================
-# FILTER ASURANSI
-# ==========================
-
-insurance_clinics = filter_insurance(
-    specialist_clinics,
-    patient_insurance
-)
-print("\n==============================")
-print(f"KLINIK SPESIALIS + {patient_insurance}")
-print("==============================\n")
-
-for clinic in insurance_clinics:
-    print(
-        f"{clinic['name']} - "
-        f"{clinic['distance']} km"
-    )
+@dataclass(frozen=True)
+class RoutingResult:
+    specialization_used: str | None
+    fallback_used: bool
+    recommendations: list[dict[str, Any]]
 
 
-# ==========================
-# TOP 3 REKOMENDASI
-# ==========================
+def recommend_facilities(
+    *,
+    patient_lat: float,
+    patient_lon: float,
+    specialization: str | None,
+    patient_insurance: str | None,
+    limit: int = 3,
+    db_path: str | Path | None = None,
+    fallback_specialization: str = "dokter_umum",
+) -> RoutingResult:
+    facilities = load_facilities(db_path=db_path)
+    fallback_used = False
+    specialization_used = specialization.strip().lower() if specialization else None
 
-top3 = insurance_clinics[:3]
+    filtered = filter_by_specialization(facilities, specialization_used)
+    if not filtered and specialization_used and specialization_used != fallback_specialization:
+        fallback_used = True
+        specialization_used = fallback_specialization
+        filtered = filter_by_specialization(facilities, specialization_used)
 
-print("\n==============================")
-print("TOP 3 REKOMENDASI")
-print("==============================\n")
+    ranked = _rank_by_distance(filtered or facilities, patient_lat, patient_lon)
 
-for i, clinic in enumerate(top3, start=1):
-    print(
-        f"{i}. {clinic['name']} "
-        f"({clinic['distance']} km)"
+    if patient_insurance:
+        ranked = filter_insurance(ranked, patient_insurance)
+        if not ranked:
+            ranked = _rank_by_distance(filtered or facilities, patient_lat, patient_lon)
+
+    return RoutingResult(
+        specialization_used=specialization_used,
+        fallback_used=fallback_used,
+        recommendations=ranked[: max(1, limit)],
     )
