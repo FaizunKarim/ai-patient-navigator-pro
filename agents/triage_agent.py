@@ -56,21 +56,34 @@ def _should_process_message(
     return False
 
 
-def _build_llm() -> ChatOpenAI | None:
-    api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        return None
+def _build_llm():
+    # Coba Groq dulu (primary)
+    groq_key = os.getenv("GROQ_API_KEY")
+    if groq_key:
+        try:
+            return ChatOpenAI(
+                api_key=groq_key,
+                base_url=os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
+                model=os.getenv("AI_MODEL", "llama-3.3-70b-versatile"),
+                temperature=float(os.getenv("AI_TEMPERATURE", "0.2")),
+            )
+        except Exception:
+            pass
 
-    base_url = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
-    model = os.getenv("AI_MODEL", "llama-3.3-70b-versatile")
-    temperature = float(os.getenv("AI_TEMPERATURE", "0.2"))
+    # Fallback ke OpenAI ChatGPT
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if openai_key:
+        try:
+            return ChatOpenAI(
+                api_key=openai_key,
+                base_url="https://api.openai.com/v1",
+                model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                temperature=float(os.getenv("AI_TEMPERATURE", "0.2")),
+            )
+        except Exception:
+            pass
 
-    return ChatOpenAI(
-        api_key=api_key,
-        base_url=base_url,
-        model=model,
-        temperature=temperature,
-    )
+    return None
 
 
 def _rule_based_triage(text: str) -> TriageOutput:

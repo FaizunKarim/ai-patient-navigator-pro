@@ -44,7 +44,7 @@
 │  │              triage_agent.py                       │     │
 │  │  - Koneksi WebSocket (BandLink)                    │     │
 │  │  - Mention-based message processing                │     │
-│  │  - LLM Triage (Groq Llama 3.3 70B)                 │     │
+│  │  - LLM Triage (Groq Llama 3.3 70B / OpenAI GPT)    │     │
 │  │  - Rule-based fallback triage                      │     │
 │  │  - Geo-Routing + Insurance filter pipeline         │     │
 │  └───────────────────────┬────────────────────────────┘     │
@@ -101,10 +101,22 @@
 3. `getRoom` → GET `/api/chat/room/:roomId` → ambil riwayat pesan dari Band API atau MongoDB
 4. Agent `triage_agent.py` → terima event via WebSocket → proses triase → reply ke room
 
+## LLM Strategy: Groq (Primary) → OpenAI ChatGPT (Fallback)
+
+Agent menggunakan strategi dual-LLM:
+1. **Primary**: Groq API dengan model `llama-3.3-70b-versatile` (gratis, cepat)
+2. **Fallback**: OpenAI ChatGPT `gpt-4o-mini` (jika Groq gagal/limit)
+3. **Final Fallback**: Rule-based triage (tanpa LLM) jika kedua API tidak tersedia
+
+Konfigurasi di `_build_llm()`:
+- Cek `GROQ_API_KEY` → jika ada, gunakan Groq
+- Jika Groq gagal, cek `OPENAI_API_KEY` → gunakan OpenAI
+- Jika keduanya tidak ada, return `None` → pakai rule-based
+
 ## Aturan Standar Penulisan Kode
 
 1. **Separation of Concerns**: Controller ↔ Service ↔ Model dipisah jelas
 2. **Error Handling**: Semua async handler punya try-catch dengan response JSON `{ success: false, message: "..." }`
 3. **JWT**: Token diverifikasi di middleware `authMiddleware.js` untuk semua route privat
-4. **Environment Variables**: `.env` untuk semua konfigurasi rahasia (JWT_SECRET, MONGODB_URI, BAND_API_KEY, GROQ_API_KEY, dll)
+4. **Environment Variables**: `.env` untuk semua konfigurasi rahasia (JWT_SECRET, MONGODB_URI, BAND_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, dll)
 5. **Version Control**: Commit deskriptif, branch terpisah untuk fitur baru

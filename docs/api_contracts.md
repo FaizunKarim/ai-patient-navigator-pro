@@ -302,9 +302,11 @@ Catatan: `lat` dan `lon` bersifat opsional (dikirim saat GPS tersedia).
 | `BAND_API_KEY` | API Key Band Platform | `band_key_xxx` |
 | `BAND_AGENT_ID` | Agent ID Band | `agent-uuid` |
 | `BAND_AGENT_HANDLE` | Handle mention agent | `@triage_agent` |
-| `GROQ_API_KEY` | API Key Groq | `gsk_xxx` |
+| `GROQ_API_KEY` | API Key Groq (Primary LLM) | `gsk_xxx` |
 | `GROQ_BASE_URL` | Base URL Groq | `https://api.groq.com/openai/v1` |
-| `AI_MODEL` | Model LLM | `llama-3.3-70b-versatile` |
+| `OPENAI_API_KEY` | API Key OpenAI ChatGPT (Fallback) | `sk-xxx` |
+| `OPENAI_MODEL` | Model ChatGPT fallback | `gpt-4o-mini` |
+| `AI_MODEL` | Model LLM primary | `llama-3.3-70b-versatile` |
 | `AI_TEMPERATURE` | Temperature LLM | `0.2` |
 | `DEFAULT_PATIENT_LAT` | Default latitude GPS | `-7.870` |
 | `DEFAULT_PATIENT_LON` | Default longitude GPS | `111.463` |
