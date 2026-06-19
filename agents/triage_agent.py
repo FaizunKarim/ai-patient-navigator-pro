@@ -9,14 +9,6 @@ from typing import Any, Literal
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, ValidationError
-from thenvoi.client.rest import (
-    AsyncRestClient,
-    ChatMessageRequest,
-    ChatMessageRequestMentionsItem,
-    DEFAULT_REQUEST_OPTIONS,
-)
-from thenvoi.platform.event import MessageEvent, RoomAddedEvent
-from thenvoi.platform import ThenvoiLink
 
 from tools.geo_routing import recommend_facilities
 
@@ -159,27 +151,17 @@ async def _llm_triage(llm: ChatOpenAI, history: list[dict[str, str]]) -> TriageO
         return TriageOutput(status="INCOMPLETE", clarifying_question="Boleh jelaskan gejalanya lebih spesifik?")
 
 
-async def _fetch_recent_history(rest: AsyncRestClient, room_id: str, limit: int = 6) -> list[dict[str, str]]:
-    response = await rest.human_api_messages.list_my_chat_messages(
-        chat_id=room_id,
-        page=1,
-        page_size=max(1, limit),
-        request_options=DEFAULT_REQUEST_OPTIONS,
-    )
-    items = list(getattr(response, "data", []) or [])
-    items.reverse()
-    history: list[dict[str, str]] = []
-    for m in items[-limit:]:
-        role = "assistant" if getattr(m, "sender_type", "") == "agent" else "user"
-        history.append({"role": role, "content": getattr(m, "content", "")})
-    return history
+async def _fetch_recent_history(room_id: str, limit: int = 6) -> list[dict[str, str]]:
+    # The integration with external platforms (Thenvoi/Band) has been removed.
+    # In a real standalone scenario, this would fetch from the local database.
+    return []
 
 
 def _format_routing_message(result: TriageOutput, routing: Any, patient_insurance: str | None) -> str:
     parts: list[str] = []
     if result.summary:
         parts.append(result.summary)
-    if routing.fallback_used:
+    if getattr(routing, "fallback_used", False):
         parts.append("Spesialis tidak tersedia di area terdekat. Dialihkan ke layanan umum terdekat.")
 
     parts.append("Rekomendasi fasilitas terdekat:")
@@ -190,6 +172,18 @@ def _format_routing_message(result: TriageOutput, routing: Any, patient_insuranc
         if patient_insurance:
             insurance_text = "sesuai" if patient_insurance in accepted else "tidak sesuai"
         else:
+            insurance_text = "tidak diketahui"
+        parts.append(f"{i}. {name} ({distance} km) - asuransi {insurance_text}")
+
+    return "\n".join(parts)
+
+
+async def _reply(room_id: str, sender_id: str, sender_name: str | None, text: str) -> None:
+    # Reply functionality via external platform has been removed.
+    # For standalone mode, the backend API handles message delivery.
+    pass
+
+
             insurance_text = "tidak diketahui"
         parts.append(f"{i}. {name} ({distance} km) - asuransi {insurance_text}")
 

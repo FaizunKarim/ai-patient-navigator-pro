@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { login as apiLogin } from "../utils/auth";
 import { api } from "../utils/api";
 
 export default function ReAuthModal({ draftMessage, onClose, onResend }) {

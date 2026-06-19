@@ -1,10 +1,16 @@
 const ChatHistory = require("../models/ChatHistory");
 const User = require("../models/User");
-const band = require("../services/bandService");
+const { generateChatReply } = require("../services/aiAgentService");
+
+const getUserId = (req) => req.user?.userId || null;
+const createRoomId = () => `room-${Date.now()}`;
 
 const getHistory = async (req, res) => {
   try {
-    const history = await ChatHistory.find({ userId: req.user.userId }).sort({ createdAt: 1 }).lean();
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, message: "Sesi tidak valid." });
+
+    const history = await ChatHistory.find({ userId }).sort({ createdAt: 1 }).lean();
     return res.status(200).json({ success: true, count: history.length, data: history });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Gagal mengambil riwayat chat." });
@@ -13,30 +19,28 @@ const getHistory = async (req, res) => {
 
 const getSessions = async (req, res) => {
   try {
-    if (band.isBandConfigured()) {
-      const data = await band.listChats({ page: 1, pageSize: 50 });
-      const chats = data?.data || data?.chats || [];
-      const sessions = chats.map((c) => ({
-        roomId: c.id,
-        title: c.title || "Konsultasi Medis",
-        insertedAt: c.inserted_at || c.insertedAt || null,
-      }));
-      return res.status(200).json({ success: true, data: sessions });
-    }
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, message: "Sesi tidak valid." });
 
-    const docs = await ChatHistory.find({ userId: req.user.userId }).sort({ createdAt: 1 }).lean();
+    const docs = await ChatHistory.find({ userId }).sort({ createdAt: 1 }).lean();
     const byRoom = new Map();
+
     for (const item of docs) {
-      const rid = item.roomId || "default-room";
-      if (!byRoom.has(rid) && item.sender === "user") {
-        byRoom.set(rid, {
-          roomId: rid,
+      const roomId = item.roomId || "default-room";
+      if (!byRoom.has(roomId) && item.sender === "user") {
+        byRoom.set(roomId, {
+          roomId,
           title: item.message?.slice(0, 40) || "Konsultasi Medis",
           insertedAt: item.createdAt || item.timestamp || null,
         });
       }
     }
-    return res.status(200).json({ success: true, data: Array.from(byRoom.values()).reverse() });
+
+    return res.status(200).json({
+      success: true,
+      data: Array.from(byRoom.values()).reverse(),
+      mode: "ai",
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Gagal mengambil daftar sesi chat." });
   }
@@ -44,21 +48,18 @@ const getSessions = async (req, res) => {
 
 const ensureSession = async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, message: "Sesi tidak valid." });
+
     const fresh = String(req.query.fresh || "").toLowerCase() === "true";
-    const user = await User.findById(req.user.userId);
-    if (!user) return res.status(404).json({ success: false, message: "User tidak ditemukan." });
+    if (fresh) return res.status(200).json({ success: true, roomId: createRoomId(), mode: "ai" });
 
-    if (!band.isBandConfigured()) {
-      return res.status(200).json({ success: true, roomId: user.bandChatId || "default-room", mode: "local" });
-    }
-
-    if (fresh || !user.bandChatId) {
-      const chatId = await band.createChat();
-      user.bandChatId = chatId;
-      await user.save();
-    }
-
-    return res.status(200).json({ success: true, roomId: user.bandChatId, mode: "band" });
+    const latest = await ChatHistory.findOne({ userId }).sort({ createdAt: -1 }).lean();
+    return res.status(200).json({
+      success: true,
+      roomId: latest?.roomId || createRoomId(),
+      mode: "ai",
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Gagal membuat sesi chat." });
   }
@@ -66,33 +67,19 @@ const ensureSession = async (req, res) => {
 
 const getRoom = async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, message: "Sesi tidak valid." });
+
     const { roomId } = req.params;
-
-    if (band.isBandConfigured()) {
-      const data = await band.listMessages({ chatId: roomId, page: 1, pageSize: 100 });
-      const items = data?.data || data?.messages || [];
-      const messages = items
-        .slice()
-        .reverse()
-        .map((m) => ({
-          id: m.id,
-          text: m.content,
-          isAi: m.sender_type === "agent",
-          senderType: m.sender_type,
-          senderId: m.sender_id,
-          createdAt: m.inserted_at || null,
-        }));
-      return res.status(200).json({ success: true, messages });
-    }
-
-    const history = await ChatHistory.find({ userId: req.user.userId, roomId }).sort({ createdAt: 1 }).lean();
-    const messages = history.map((h) => ({
-      id: h._id.toString(),
-      text: h.message,
-      isAi: h.sender !== "user",
-      createdAt: h.createdAt || h.timestamp || null,
+    const history = await ChatHistory.find({ userId, roomId }).sort({ createdAt: 1 }).lean();
+    const messages = history.map((item) => ({
+      id: item._id.toString(),
+      text: item.message,
+      isAi: item.sender !== "user",
+      createdAt: item.createdAt || item.timestamp || null,
     }));
-    return res.status(200).json({ success: true, messages });
+
+    return res.status(200).json({ success: true, messages, mode: "ai" });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Gagal mengambil chat room." });
   }
@@ -100,69 +87,68 @@ const getRoom = async (req, res) => {
 
 const sendMessage = async (req, res) => {
   try {
-    const { roomId, message, lat, lon } = req.body;
-    if (!message) {
-      return res.status(400).json({ success: false, message: "Pesan wajib diisi." });
-    }
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, message: "Sesi tidak valid." });
 
-    // Simpan koordinat GPS jika dikirim dari frontend
+    const { roomId, message, lat, lon } = req.body;
+    const cleanMessage = String(message || "").trim();
+    if (!cleanMessage) return res.status(400).json({ success: false, message: "Pesan wajib diisi." });
+
+    const roomIdValue = roomId || createRoomId();
+
     if (lat !== undefined && lon !== undefined) {
       try {
-        await User.findByIdAndUpdate(req.user.userId, {
+        await User.findByIdAndUpdate(userId, {
           defaultLat: parseFloat(lat),
           defaultLon: parseFloat(lon),
         });
-      } catch { /* non-blokir jika gagal */ }
+      } catch {
+        // GPS update tidak boleh memblokir chat.
+      }
     }
 
-    if (!band.isBandConfigured()) {
-      await ChatHistory.create({
-        userId: req.user.userId,
-        roomId: roomId || "default-room",
-        sender: "user",
-        message,
+    const recentHistory = await ChatHistory.find({ userId, roomId: roomIdValue })
+      .sort({ createdAt: -1 })
+      .limit(12)
+      .lean();
+
+    const orderedHistory = recentHistory.reverse();
+    const userMessage = await ChatHistory.create({
+      userId,
+      roomId: roomIdValue,
+      sender: "user",
+      message: cleanMessage,
+    });
+
+    let aiText;
+    try {
+      aiText = await generateChatReply({ history: orderedHistory, message: cleanMessage, lat, lon });
+    } catch (error) {
+      await ChatHistory.findByIdAndDelete(userMessage._id).catch(() => {});
+      return res.status(502).json({
+        success: false,
+        message: error.message || "AI agent gagal membalas.",
       });
-
-      return res.status(201).json({
-        success: true,
-        roomId: roomId || "default-room",
-        aiResponse: {
-          id: Date.now().toString(),
-          text: `Patient Navigator menerima pesan: ${message}`,
-        },
-      });
     }
 
-    const user = await User.findById(req.user.userId);
-    if (!user) return res.status(404).json({ success: false, message: "User tidak ditemukan." });
-
-    const chatId = roomId || user.bandChatId || (await band.createChat());
-    if (!user.bandChatId) {
-      user.bandChatId = chatId;
-      await user.save();
-    }
-
-    const agentId = process.env.BAND_AGENT_ID;
-    const agentHandle = process.env.BAND_AGENT_HANDLE;
-    if (!agentId) return res.status(500).json({ success: false, message: "BAND_AGENT_ID belum di-set di server." });
-
-    const mentions = [{ id: agentId }];
-    const prefixHandle = agentHandle ? (agentHandle.startsWith("@") ? agentHandle : `@${agentHandle}`) : null;
-    const content = prefixHandle && !message.includes(prefixHandle) ? `${prefixHandle} ${message}` : message;
-
-    await band.sendMessage({ chatId, content, mentions });
+    const aiMessage = await ChatHistory.create({
+      userId,
+      roomId: roomIdValue,
+      sender: "ai",
+      message: aiText,
+    });
 
     return res.status(201).json({
       success: true,
-      roomId: chatId,
-      queued: true,
+      roomId: roomIdValue,
+      mode: "ai",
       aiResponse: {
-        id: Date.now().toString(),
-        text: "Diproses oleh agen...",
+        id: aiMessage._id.toString(),
+        text: aiText,
       },
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Gagal mengirim pesan." });
+    return res.status(500).json({ success: false, message: "Gagal mengirim pesan ke AI agent." });
   }
 };
 

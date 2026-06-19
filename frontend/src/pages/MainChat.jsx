@@ -16,7 +16,7 @@ const MainChat = () => {
   const [historyList, setHistoryList] = useState([]);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
-  const [chatMode, setChatMode] = useState("local");
+  const [chatMode, setChatMode] = useState("ai");
   const [draftMessage, setDraftMessage] = useState(null);
   const [reAuthVisible, setReAuthVisible] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -82,7 +82,7 @@ const MainChat = () => {
         if (session.data?.success) {
           sessionData = session.data;
           setActiveRoomId(session.data.roomId || null);
-          setChatMode(session.data.mode || "local");
+          setChatMode(session.data.mode || "ai");
         }
       } catch {}
       await handleNewChat();
@@ -104,10 +104,6 @@ const MainChat = () => {
             if (response.data.aiResponse?.text) {
               setMessages((prev) => [...prev, { id: Date.now().toString(), text: response.data.aiResponse.text, isAi: true }]);
             }
-            if (nextRoomId && (sessionData?.mode || chatMode) === "band") {
-              const room = await api.get(`/api/chat/room/${nextRoomId}`);
-              if (room.data?.success) setMessages(room.data.messages);
-            }
           }
         } catch {}
       }
@@ -115,38 +111,37 @@ const MainChat = () => {
     init();
   }, []);
 
+  // Select a chat room and load its messages. Previously there was a "LOCAL"
+  // fallback handling that loaded messages from the client side cache. Since the
+  // application now relies exclusively on the backend AI service, the local
+  // fallback is removed. The function now always fetches the room data from the
+  // API.
   const handleSelectRoom = async (roomId) => {
-    if (String(roomId).includes("LOCAL")) {
-      const localRoom = historyList.find(room => room.roomId === roomId);
-      if (localRoom) { setMessages(localRoom.chatData || []); setActiveRoomId(roomId); setIsSidebarOpen(false); }
-      return;
-    }
     setLoading(true);
     setActiveRoomId(roomId);
     setIsSidebarOpen(false);
     try {
       const response = await api.get(`/api/chat/room/${roomId}`);
       if (response.data?.success) setMessages(response.data.messages);
-    } catch {} finally { setLoading(false); }
+    } catch {
+      // In case of an error we simply keep the previous messages; UI will show
+      // loading state briefly and then stop.
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleNewChat = async () => {
-    if (chatMode !== "band") {
-      if (messages.length > 1 && !activeRoomId) {
-        const firstUserMsg = messages.find(msg => !msg.isAi);
-        const sessionTitle = firstUserMsg ? firstUserMsg.text : "Sesi Konsultasi Medis";
-        setHistoryList(prev => [{ roomId: `LOCAL-${Date.now()}`, title: sessionTitle, chatData: messages }, ...prev]);
+    try {
+      const session = await api.get("/api/chat/session?fresh=true");
+      if (session.data?.success) {
+        setActiveRoomId(session.data.roomId || null);
+        setChatMode(session.data.mode || "ai");
+        await fetchChatHistory();
       }
+    } catch {
       setActiveRoomId(null);
-    } else {
-      try {
-        const session = await api.get("/api/chat/session?fresh=true");
-        if (session.data?.success) {
-          setActiveRoomId(session.data.roomId || null);
-          setChatMode(session.data.mode || "band");
-          await fetchChatHistory();
-        }
-      } catch {}
+      setChatMode("ai");
     }
     setMessages([{ id: "default", text: "Halo Bos! Silakan konsultasikan keluhan Anda, kirim foto resep, video gejala, atau langsung gunakan pesan suara.", isAi: true }]);
     setIsSidebarOpen(false);
@@ -299,14 +294,6 @@ const MainChat = () => {
         if (response.data.aiResponse?.text) {
           setMessages((prev) => [...prev, { id: response.data.aiResponse.id || Date.now().toString(), text: response.data.aiResponse.text, isAi: true }]);
         }
-        if (nextRoomId && chatMode === "band") {
-          setTimeout(async () => {
-            try {
-              const room = await api.get(`/api/chat/room/${nextRoomId}`);
-              if (room.data?.success) setMessages(room.data.messages);
-            } catch {}
-          }, 1200);
-        }
       }
     } catch (err) {
       const status = err?.response?.status;
@@ -315,9 +302,7 @@ const MainChat = () => {
         if (activeRoomId) localStorage.setItem("pending_room_id", activeRoomId);
         navigate("/"); return;
       }
-      setTimeout(() => {
-        setMessages((prev) => [...prev, { id: Date.now().toString(), text: `[Offline Mode] Pesan aman tersimpan lokal.`, isAi: true }]);
-      }, 1000);
+      setMessages((prev) => [...prev, { id: Date.now().toString(), text: err?.response?.data?.message || "AI agent gagal membalas. Cek konfigurasi GROQ_API_KEY atau OPENAI_API_KEY di backend.", isAi: true }]);
     } finally {
       setIsAiLoading(false);
     }
