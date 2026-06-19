@@ -1,8 +1,23 @@
+"""
+Triage & Geo-Routing Agent (standalone).
+
+Logika triase medis + geo-routing fasilitas kesehatan terdekat.
+Berjalan mandiri tanpa platform chat eksternal. Agent ini menerima
+keluhan pasien, menjalankan triase (Groq/OpenAI bila tersedia, atau
+rule-based sebagai fallback), lalu memberikan rekomendasi fasilitas
+terdekat yang sesuai asuransi.
+
+Penggunaan:
+    python triage_agent.py              # mode interaktif (stdin)
+    python triage_agent.py "keluhan"    # satu kali triage
+"""
+
 from __future__ import annotations
 
 import asyncio
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from typing import Any, Literal
 
@@ -27,30 +42,8 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _should_process_message(
-    *,
-    payload: Any,
-    agent_id: str,
-) -> bool:
-    if payload is None:
-        return False
-
-    if getattr(payload, "sender_type", None) == "agent" and getattr(payload, "sender_id", None) == agent_id:
-        return False
-
-    metadata = getattr(payload, "metadata", None)
-    mentions = getattr(metadata, "mentions", None) if metadata else None
-    if not mentions:
-        return False
-
-    for m in mentions:
-        if getattr(m, "id", None) == agent_id:
-            return True
-    return False
-
-
 def _build_llm():
-    # Cobo Groq dulu (primary)
+    # Coba Groq dulu (primary)
     groq_key = os.getenv("GROQ_API_KEY")
     if groq_key:
         try:
@@ -151,12 +144,6 @@ async def _llm_triage(llm: ChatOpenAI, history: list[dict[str, str]]) -> TriageO
         return TriageOutput(status="INCOMPLETE", clarifying_question="Boleh jelaskan gejalanya lebih spesifik?")
 
 
-async def _fetch_recent_history(room_id: str, limit: int = 6) -> list[dict[str, str]]:
-    # The integration with external platforms (Thenvoi/Band) has been removed.
-    # In a real standalone scenario, this would fetch from the local database.
-    return []
-
-
 def _format_routing_message(result: TriageOutput, routing: Any, patient_insurance: str | None) -> str:
     parts: list[str] = []
     if result.summary:
@@ -178,148 +165,109 @@ def _format_routing_message(result: TriageOutput, routing: Any, patient_insuranc
     return "\n".join(parts)
 
 
-async def _reply(room_id: str, sender_id: str, sender_name: str | None, text: str) -> None:
-    # Reply functionality via external platform has been removed.
-    # For standalone mode, the backend API handles message delivery.
-    pass
-
-
-            insurance_text = "tidak diketahui"
-        parts.append(f"{i}. {name} ({distance} km) - asuransi {insurance_text}")
-
-    return "\n".join(parts)
-
-
-async def _reply(
-    rest: AsyncRestClient,
+def triage_message_to_text(
+    triage: TriageOutput,
     *,
-    room_id: str,
-    sender_id: str,
-    sender_name: str | None,
-    text: str,
-) -> None:
-    mention_name = (sender_name or "user").strip() or "user"
-    content = f"@{mention_name} {text}".strip()
-    await rest.agent_api_messages.create_agent_chat_message(
-        chat_id=room_id,
-        message=ChatMessageRequest(
-            content=content,
-            mentions=[ChatMessageRequestMentionsItem(id=sender_id)],
-        ),
-        request_options=DEFAULT_REQUEST_OPTIONS,
+    patient_lat: float,
+    patient_lon: float,
+    patient_insurance: str | None,
+) -> str:
+    """Ubah hasil triase menjadi teks jawaban untuk pasien.
+
+    Jika INCOMPLETE -> tampilkan clarifying question.
+    Jika LOW urgency dengan OTC -> tampilkan saran OTC.
+    Jika butuh fasilitas -> lakukan geo-routing & rekomendasi.
+    """
+    if triage.status == "INCOMPLETE":
+        return triage.clarifying_question or "Boleh jelaskan gejalanya lebih spesifik?"
+
+    urgency = triage.urgency or "LOW"
+    if urgency == "LOW" and triage.otc_recommendations:
+        otc = ", ".join(triage.otc_recommendations)
+        return (triage.summary or "Keluhan tampak ringan.") + f"\nSaran OTC: {otc}"
+
+    spec = (triage.specialization or "dokter_umum").strip().lower()
+    if spec == "igd":
+        spec = "dokter_umum"
+
+    routing = recommend_facilities(
+        patient_lat=patient_lat,
+        patient_lon=patient_lon,
+        specialization=spec,
+        patient_insurance=patient_insurance,
+        limit=3,
     )
+    return _format_routing_message(triage, routing, patient_insurance)
 
 
 async def run_agent() -> None:
     load_dotenv()
-
-    agent_id = os.getenv("BAND_AGENT_ID")
-    api_key = os.getenv("BAND_API_KEY")
-    if not agent_id or not api_key:
-        raise RuntimeError("BAND_AGENT_ID dan BAND_API_KEY wajib di-set")
 
     patient_lat = float(os.getenv("DEFAULT_PATIENT_LAT", "-7.870"))
     patient_lon = float(os.getenv("DEFAULT_PATIENT_LON", "111.463"))
     patient_insurance = os.getenv("DEFAULT_PATIENT_INSURANCE", "BPJS")
 
     llm = _build_llm()
-    print(f"🤖 Agent starting... ID: {agent_id}")
+    print("🤖 Triage Agent (standalone)")
     print(f"📍 Default location: {patient_lat}, {patient_lon}")
     print(f"🏥 Default insurance: {patient_insurance}")
     print(f"🧠 LLM: {'Groq/OpenAI' if llm else 'Rule-based (no LLM)'}")
-    
-    link = ThenvoiLink(agent_id=agent_id, api_key=api_key)
-    print("🔌 Connecting to Band Platform...")
+    print("Ketik keluhan pasien (atau 'exit' untuk keluar).")
 
-    await link.connect()
-    print("✅ Connected to Band Platform!")
-    
-    await link.subscribe_agent_rooms(agent_id)
-    print("✅ Subscribed to agent rooms!")
+    history: list[dict[str, str]] = []
 
-    try:
-        chats = await link.rest.agent_api_chats.list_agent_chats(
-            page=1,
-            page_size=100,
-            request_options=DEFAULT_REQUEST_OPTIONS,
-        )
-        for room in getattr(chats, "data", []) or []:
-            room_id = getattr(room, "id", None)
-            if room_id:
-                await link.subscribe_room(room_id)
-    except Exception:
-        pass
-
-    print("\n👂 Listening for messages... (Press Ctrl+C to stop)")
-    async for event in link:
-        if isinstance(event, RoomAddedEvent) and event.room_id:
-            print(f"📥 New room added: {event.room_id}")
-            await link.subscribe_room(event.room_id)
-            continue
-
-        if not isinstance(event, MessageEvent):
-            continue
-
-        room_id = event.room_id or getattr(event.payload, "chat_room_id", None)
-        payload = event.payload
-        if not room_id or not payload:
-            continue
-
-        if not _should_process_message(payload=payload, agent_id=agent_id):
-            continue
-
-        message_id = getattr(payload, "id", "")
-        sender_id = getattr(payload, "sender_id", "")
-        sender_name = getattr(payload, "sender_name", None)
-        content = getattr(payload, "content", "")
-
-        print(f"💬 Processing message from {sender_name}: {content[:50]}...")
-        await link.mark_processing(room_id, message_id)
-
+    while True:
         try:
-            history = await _fetch_recent_history(link.rest, room_id, limit=6)
-            if llm:
-                triage = await _llm_triage(llm, history)
-            else:
-                triage = _rule_based_triage(content)
+            content = await asyncio.to_thread(input, "\nPasien> ")
+        except (EOFError, KeyboardInterrupt):
+            print("\nBye.")
+            break
 
-            if triage.status == "INCOMPLETE":
-                q = triage.clarifying_question or "Boleh jelaskan gejalanya lebih spesifik?"
-                print(f"❓ Clarifying: {q}")
-                await _reply(link.rest, room_id=room_id, sender_id=sender_id, sender_name=sender_name, text=q)
-                await link.mark_processed(room_id, message_id)
-                continue
+        content = content.strip()
+        if not content:
+            continue
+        if content.lower() in {"exit", "quit", "keluar"}:
+            break
 
-            urgency = triage.urgency or "LOW"
-            if urgency == "LOW" and triage.otc_recommendations:
-                otc = ", ".join(triage.otc_recommendations)
-                text = (triage.summary or "Keluhan tampak ringan.") + f"\nSaran OTC: {otc}"
-                print(f"💊 LOW urgency - OTC: {otc}")
-                await _reply(link.rest, room_id=room_id, sender_id=sender_id, sender_name=sender_name, text=text)
-                await link.mark_processed(room_id, message_id)
-                continue
+        history.append({"role": "user", "content": content})
 
-            spec = (triage.specialization or "dokter_umum").strip().lower()
-            if spec == "igd":
-                spec = "dokter_umum"
+        if llm:
+            triage = await _llm_triage(llm, history[-6:])
+        else:
+            triage = _rule_based_triage(content)
 
-            routing = recommend_facilities(
-                patient_lat=patient_lat,
-                patient_lon=patient_lon,
-                specialization=spec,
-                patient_insurance=patient_insurance,
-                limit=3,
-            )
-            text = _format_routing_message(triage, routing, patient_insurance)
-            print(f"🏥 Routing to {spec}: {routing.recommendations[0].name if routing.recommendations else 'No facilities'}")
-            await _reply(link.rest, room_id=room_id, sender_id=sender_id, sender_name=sender_name, text=text)
-            await link.mark_processed(room_id, message_id)
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            await link.mark_failed(room_id, message_id, str(e))
+        answer = triage_message_to_text(
+            triage,
+            patient_lat=patient_lat,
+            patient_lon=patient_lon,
+            patient_insurance=patient_insurance,
+        )
+        print(f"🩺 {answer}")
+        history.append({"role": "assistant", "content": answer})
 
 
 def main() -> None:
+    # Mode argumen: triage satu kali untuk keluhan yang diberikan.
+    if len(sys.argv) > 1:
+        complaint = " ".join(sys.argv[1:])
+        load_dotenv()
+        patient_lat = float(os.getenv("DEFAULT_PATIENT_LAT", "-7.870"))
+        patient_lon = float(os.getenv("DEFAULT_PATIENT_LON", "111.463"))
+        patient_insurance = os.getenv("DEFAULT_PATIENT_INSURANCE", "BPJS")
+
+        async def _once() -> None:
+            llm = _build_llm()
+            triage = await _llm_triage(llm, [{"role": "user", "content": complaint}]) if llm else _rule_based_triage(complaint)
+            print(triage_message_to_text(
+                triage,
+                patient_lat=patient_lat,
+                patient_lon=patient_lon,
+                patient_insurance=patient_insurance,
+            ))
+
+        asyncio.run(_once())
+        return
+
     asyncio.run(run_agent())
 
 

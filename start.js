@@ -46,14 +46,8 @@ console.log('  Starting AI Patient Navigator Pro...');
 console.log('===========================================');
 console.log('');
 
-// Determine agent command based on platform
-const agentCmd = isWin
-    ? path.join(root, 'agents', '.venv', 'Scripts', 'python.exe')
-    : 'uv run python triage_agent.py';
-
 const backend = run('Backend (Express)', 'node', ['server.js'], 'backend-api');
 const frontend = run('Frontend (Vite)', 'pnpm', ['run', 'dev'], 'frontend');
-const agent = run('Agent (Python/Band SDK)', agentCmd, ['triage_agent.py'], 'agents');
 
 console.log('');
 console.log('===========================================');
@@ -62,7 +56,6 @@ console.log('===========================================');
 console.log('');
 console.log('- Frontend: http://localhost:5173');
 console.log('- Backend:  http://localhost:5000');
-console.log('- Agent:    Running in background');
 console.log('');
 console.log('Press Ctrl+C to stop all services');
 console.log('');
@@ -71,6 +64,5 @@ process.on('SIGINT', () => {
     console.log('\nStopping all services...');
     backend.kill('SIGTERM');
     frontend.kill('SIGTERM');
-    agent.kill('SIGTERM');
     process.exit(0);
 });

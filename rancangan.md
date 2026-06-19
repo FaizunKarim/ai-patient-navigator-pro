@@ -1,3 +1,13 @@
+> ⚠️ **DEPRECATED — DOKUMEN HISTORIS (JANGAN DIIKUTI)**
+>
+> Dokumen ini mendeskripsikan **arsitektur LAMA berbasis Band Platform / Thenvoi SDK**
+> yang **sudah tidak dipakai lagi**. Integrasi Band/Thenvoi & AI lokal sudah dihapus
+> seluruhnya; chat pasien sekarang langsung terhubung ke AI Agent (Groq/OpenAI via
+> `backend-api/services/aiAgentService.js`). Simpan dokumen ini hanya sebagai catatan
+> sejarah/rancangan awal. Untuk arsitektur yang berlaku, lihat `docs/engineering.md`.
+>
+> ---
+
 # BAGIAN 1: ARSITEKTUR CETAK BIRU (MASTER BLUEPRINT)
 
 **ARSITEKTUR CETAK BIRU (MASTER BLUEPRINT)**

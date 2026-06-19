@@ -99,16 +99,7 @@ Semua endpoint chat memerlukan **Authorization header**: `Bearer <token>`
 {
   "success": true,
   "roomId": "default-room",
-  "mode": "local"
-}
-```
-
-Atau (mode Band):
-```json
-{
-  "success": true,
-  "roomId": "chat-uuid-here",
-  "mode": "band"
+  "mode": "ai"
 }
 ```
 
@@ -126,7 +117,7 @@ Atau (mode Band):
 
 Catatan: `lat` dan `lon` bersifat opsional (dikirim saat GPS tersedia).
 
-**Response (201) - Mode Local:**
+**Response (201):**
 ```json
 {
   "success": true,
@@ -134,19 +125,6 @@ Catatan: `lat` dan `lon` bersifat opsional (dikirim saat GPS tersedia).
   "aiResponse": {
     "id": "1718000000000",
     "text": "Patient Navigator menerima pesan: Saya sakit kepala sejak 3 hari"
-  }
-}
-```
-
-**Response (201) - Mode Band:**
-```json
-{
-  "success": true,
-  "roomId": "chat-uuid",
-  "queued": true,
-  "aiResponse": {
-    "id": "1718000000000",
-    "text": "Diproses oleh agen..."
   }
 }
 ```
@@ -299,9 +277,6 @@ Catatan: `lat` dan `lon` bersifat opsional (dikirim saat GPS tersedia).
 | `PORT` | Port backend server | `5000` |
 | `MONGODB_URI` | URI koneksi MongoDB | `mongodb://127.0.0.1:27017/ai_patient_navigator` |
 | `JWT_SECRET` | Secret key untuk JWT | `rahasia_super_aman` |
-| `BAND_API_KEY` | API Key Band Platform | `band_key_xxx` |
-| `BAND_AGENT_ID` | Agent ID Band | `agent-uuid` |
-| `BAND_AGENT_HANDLE` | Handle mention agent | `@triage_agent` |
 | `GROQ_API_KEY` | API Key Groq (Primary LLM) | `gsk_xxx` |
 | `GROQ_BASE_URL` | Base URL Groq | `https://api.groq.com/openai/v1` |
 | `OPENAI_API_KEY` | API Key OpenAI ChatGPT (Fallback) | `sk-xxx` |

@@ -33,17 +33,15 @@
 │  │ Models:          │   │   └──────────────────────────┘    │
 │  │ - User (Mongoose)│   │                                   │
 │  │ - ChatHistory    │   │   ┌──────────────────────────┐    │
-│  └──────────────────┘   │   │ bandService.js           │    │
-│                         │   │ (Band API proxy)         │    │
+│  └──────────────────┘   │   │ aiAgentService.js        │    │
+│                         │   │ (Groq/OpenAI + routing)  │    │
 │                         │   └──────────────────────────┘    │
 └─────────────────────────┼───────────────────────────────────┘
-                          │ WebSocket / REST
+                          │ HTTPS (Groq / OpenAI)
 ┌─────────────────────────┼───────────────────────────────────┐
-│          AGENTS (Python / Band SDK)                         │
+│          AI AGENT (triage + geo-routing)                    │
 │  ┌────────────────────────────────────────────────────┐     │
 │  │              triage_agent.py                       │     │
-│  │  - Koneksi WebSocket (BandLink)                    │     │
-│  │  - Mention-based message processing                │     │
 │  │  - LLM Triage (Groq Llama 3.3 70B / OpenAI GPT)    │     │
 │  │  - Rule-based fallback triage                      │     │
 │  │  - Geo-Routing + Insurance filter pipeline         │     │
@@ -67,7 +65,6 @@
   name: String (required),
   email: String (required, unique),
   password: String (required, bcrypt hashed),
-  bandChatId: String (default: null),
   defaultLat: Number (default: null),
   defaultLon: Number (default: null),
   createdAt: Date (default: now)
@@ -96,10 +93,10 @@
 
 ## Alur Chat
 
-1. `ensureSession` → GET `/api/chat/session` → buat room baru jika belum ada (Band atau local)
-2. `sendMessage` → POST `/api/chat/send` { roomId, message, lat, lon } → kirim ke Band API + mention agent → return queued response
-3. `getRoom` → GET `/api/chat/room/:roomId` → ambil riwayat pesan dari Band API atau MongoDB
-4. Agent `triage_agent.py` → terima event via WebSocket → proses triase → reply ke room
+1. `ensureSession` → GET `/api/chat/session` → buat room baru jika belum ada
+2. `sendMessage` → POST `/api/chat/send` { roomId, message, lat, lon } → panggil `aiAgentService` (Groq/OpenAI) → return jawaban AI
+3. `getRoom` → GET `/api/chat/room/:roomId` → ambil riwayat pesan dari MongoDB
+4. `aiAgentService` menjalankan triase (LLM, atau rule-based fallback) + geo-routing fasilitas terdekat
 
 ## LLM Strategy: Groq (Primary) → OpenAI ChatGPT (Fallback)
 
@@ -118,5 +115,5 @@ Konfigurasi di `_build_llm()`:
 1. **Separation of Concerns**: Controller ↔ Service ↔ Model dipisah jelas
 2. **Error Handling**: Semua async handler punya try-catch dengan response JSON `{ success: false, message: "..." }`
 3. **JWT**: Token diverifikasi di middleware `authMiddleware.js` untuk semua route privat
-4. **Environment Variables**: `.env` untuk semua konfigurasi rahasia (JWT_SECRET, MONGODB_URI, BAND_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, dll)
+4. **Environment Variables**: `.env` untuk semua konfigurasi rahasia (JWT_SECRET, MONGODB_URI, GROQ_API_KEY, OPENAI_API_KEY, dll)
 5. **Version Control**: Commit deskriptif, branch terpisah untuk fitur baru
