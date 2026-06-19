@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import Auth from "./pages/Auth";
 import MainChat from "./pages/MainChat";
+import Dashboard from "./pages/Dashboard";
 import { isAuthenticated } from "./utils/auth";
 
 const ProtectedRoute = ({ children }) => {
@@ -25,6 +26,15 @@ function App() {
         element={
           <ProtectedRoute>
             <MainChat />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
           </ProtectedRoute>
         }
       />

@@ -100,9 +100,19 @@ const getRoom = async (req, res) => {
 
 const sendMessage = async (req, res) => {
   try {
-    const { roomId, message } = req.body;
+    const { roomId, message, lat, lon } = req.body;
     if (!message) {
       return res.status(400).json({ success: false, message: "Pesan wajib diisi." });
+    }
+
+    // Simpan koordinat GPS jika dikirim dari frontend
+    if (lat !== undefined && lon !== undefined) {
+      try {
+        await User.findByIdAndUpdate(req.user.userId, {
+          defaultLat: parseFloat(lat),
+          defaultLon: parseFloat(lon),
+        });
+      } catch { /* non-blokir jika gagal */ }
     }
 
     if (!thenvoi.isThenvoiConfigured()) {
