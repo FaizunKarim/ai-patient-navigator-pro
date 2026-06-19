@@ -1,8 +1,10 @@
 import axios from "axios";
 import { clearSession, getToken, isTokenValid } from "./auth";
 
+const baseURL = import.meta.env.VITE_API_BASE_URL || "";
+
 export const api = axios.create({
-    baseURL: "",
+    baseURL,
 });
 
 // Store untuk draft message & callback
@@ -57,15 +59,3 @@ api.interceptors.response.use(
         return Promise.reject(err);
     }
 );
-</replace_in_file>
-<task_progress>
-- [x] #1 Buat ReAuthModal component
-- [x] #1 Update api.js untuk simpan draft & tampilkan modal
-- [ ] #1 Update MainChat.jsx untuk integrasi ReAuthModal
-- [ ] #2 GPS Real-Time
-- [ ] #3 Animasi Loading Tiga Titik
-- [ ] #4 Tombol "Pilih Klinik Ini"
-- [ ] #5 Dashboard Klinik
-- [ ] #6 Dokumentasi Teknis
-</task_progress>
-

@@ -41,4 +41,5 @@ DEFAULT_PATIENT_INSURANCE=BPJS
 # --------------------------------------------
 # FRONTEND (Vite - VITE_ prefix required)
 # --------------------------------------------
-VITE_API_BASE_URL=http://localhost:5000
+VITE_API_BASE_URL=/api
+VITE_API_TARGET=http://localhost:5000
